@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+.env/
+
+# Project Specific
+uploads/
+test_output_*.png
+test_zenith.png
+test_elite.png
+test_bold.png
+test_social.png
+server.log
+flyer.png
+flyer_dark.png
+flyer_minimal.png
+flyer_overlay.png
+
+# System
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+.gemini/
+.agent/
