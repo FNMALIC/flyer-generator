@@ -1,0 +1,140 @@
+{
+    "flyer_1_community": {
+        "logo_path": "logo/image.png",
+        "primary_color": "#0076BC",
+        "accent_color": "#ED1C24",
+        "facebook": "Codees CM",
+        "whatsapp": "+237 690 000 000",
+        "instagram": "@codees_cm",
+        "phone": "www.codees-cm.com",
+        "template_id": "abstract_business",
+        "headline": "The Heart of Tech in Cameroon",
+        "sub_headline": "CODEES COMMUNITY",
+        "tagline": "Connect \u00b7 Build \u00b7 Grow",
+        "body_text": "Join 1,000+ developers, designers and entrepreneurs building Africa's digital future together.",
+        "cta_text": "JOIN FOR FREE",
+        "features": [
+            {
+                "icon": "\u25cf",
+                "title": "COMMUNITY",
+                "desc": "1,000+ devs & builders across Africa"
+            },
+            {
+                "icon": "\u25c6",
+                "title": "MENTORSHIP",
+                "desc": "1:1 sessions with industry experts"
+            },
+            {
+                "icon": "\u2709",
+                "title": "EVENTS",
+                "desc": "Hackathons, workshops & networking"
+            }
+        ]
+    },
+    "flyer_2_mentorship": {
+        "logo_path": "logo/image.png",
+        "primary_color": "#0076BC",
+        "accent_color": "#ED1C24",
+        "facebook": "Codees CM",
+        "whatsapp": "+237 690 000 000",
+        "instagram": "@codees_cm",
+        "phone": "www.codees-cm.com",
+        "template_id": "abstract_business",
+        "headline": "Scale Your Career With Expert Mentors",
+        "sub_headline": "CODEES MENTORSHIP",
+        "tagline": "Personalized \u00b7 Proven \u00b7 Powerful",
+        "body_text": "Get matched with senior engineers, product leaders and founders who have done it before.",
+        "cta_text": "APPLY NOW",
+        "features": [
+            {
+                "icon": "\u25cf",
+                "title": "1:1 SESSIONS",
+                "desc": "Weekly calls with your personal mentor"
+            },
+            {
+                "icon": "\u25c6",
+                "title": "CAREER PLAN",
+                "desc": "Custom roadmap designed for you"
+            },
+            {
+                "icon": "\u2709",
+                "title": "NETWORK ACCESS",
+                "desc": "Entry into Codees' elite network"
+            }
+        ]
+    },
+    "flyer_3_incubation": {
+        "logo_path": "logo/image.png",
+        "primary_color": "#0076BC",
+        "accent_color": "#ED1C24",
+        "facebook": "Codees CM",
+        "whatsapp": "+237 690 000 000",
+        "instagram": "@codees_cm",
+        "phone": "www.codees-cm.com",
+        "template_id": "abstract_business",
+        "headline": "From Idea to MVP \u2014 We Back You",
+        "sub_headline": "CODEES INCUBATION",
+        "tagline": "Pitch \u00b7 Build \u00b7 Launch",
+        "body_text": "Our 3-month program takes your startup idea and turns it into a market-ready product with real traction.",
+        "cta_text": "PITCH YOUR IDEA",
+        "features": [
+            {
+                "icon": "\u25cf",
+                "title": "WORKSPACE",
+                "desc": "State-of-the-art co-working hub"
+            },
+            {
+                "icon": "\u25c6",
+                "title": "FUNDING",
+                "desc": "Angel & grant funding connections"
+            },
+            {
+                "icon": "\u2709",
+                "title": "LAUNCH PREP",
+                "desc": "Demo Day with investors & press"
+            }
+        ]
+    },
+    "social_1_community": {
+        "logo_path": "logo/image.png",
+        "primary_color": "#0076BC",
+        "accent_color": "#ED1C24",
+        "facebook": "Codees CM",
+        "whatsapp": "+237 690 000 000",
+        "instagram": "@codees_cm",
+        "phone": "www.codees-cm.com",
+        "template_id": "abstract_social",
+        "headline": "Join Codees",
+        "sub_headline": "The Heart of Tech in Cameroon",
+        "tagline": "Connect \u00b7 Build \u00b7 Grow with 1,000+ African Devs",
+        "cta_text": "www.codees-cm.com"
+    },
+    "social_2_mentorship": {
+        "logo_path": "logo/image.png",
+        "primary_color": "#0076BC",
+        "accent_color": "#ED1C24",
+        "facebook": "Codees CM",
+        "whatsapp": "+237 690 000 000",
+        "instagram": "@codees_cm",
+        "phone": "www.codees-cm.com",
+        "template_id": "abstract_social",
+        "headline": "Get a Mentor",
+        "sub_headline": "Codees Mentorship Program",
+        "tagline": "1:1 expert guidance to fast-track your career",
+        "cta_text": "Apply at codees-cm.com"
+    },
+    "social_3_hackathon": {
+        "logo_path": "logo/image.png",
+        "primary_color": "#0076BC",
+        "accent_color": "#ED1C24",
+        "facebook": "Codees CM",
+        "whatsapp": "+237 690 000 000",
+        "instagram": "@codees_cm",
+        "phone": "www.codees-cm.com",
+        "template_id": "abstract_social",
+        "headline": "Hack with Us",
+        "sub_headline": "Codees Annual Hackathon",
+        "tagline": "Code \u00b7 Create \u00b7 Conquer \u00b7 Win Big Prizes",
+        "cta_text": "Register at codees-cm.com"
+    }
+}

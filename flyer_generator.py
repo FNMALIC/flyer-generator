@@ -3,6 +3,7 @@ import io
 import textwrap
 import os
 import json
+import math
 from config import DEFAULT_CONFIG
 
 def get_font(font_name_or_path, size, bold=False):
@@ -295,11 +296,11 @@ def render_zenith_modern(ctx):
     else:
         d.rectangle([0, 0, w, h], fill='#0D1B2A')
 
-    # 2. Glassmorphism card – centered vertically, left-aligned with safe padding
-    padding   = int(w * 0.08)
-    card_w    = int(w * 0.52)
-    card_h    = int(h * 0.68)
-    card_x    = padding
+    # 2. Glassmorphism card – centered on canvas with generous padding
+    padding   = int(w * 0.06)
+    card_w    = int(w * 0.84)
+    card_h    = int(h * 0.72)
+    card_x    = (w - card_w) // 2      # horizontally centered
     card_y    = (h - card_h) // 2
 
     draw_glass_rect(f, (card_x, card_y, card_x + card_w, card_y + card_h),
@@ -307,7 +308,7 @@ def render_zenith_modern(ctx):
 
     # 3. Logo inside card – top-left of card
     logo_path = c.get('logo_path', 'logo/image.png')
-    draw_logo(f, logo_path, (card_x + 50, card_y + 40), size=(200, 90))
+    draw_logo(f, logo_path, (card_x + 50, card_y + 40), size=(220, 100))
 
     # 4. Thin vertical accent bar
     inner_x   = card_x + 50
@@ -526,6 +527,260 @@ def render_social_post(ctx):
     d.line([(w-corner_size, h), (w, h)], fill=secondary, width=10)
     d.line([(w, h-corner_size), (w, h)], fill=secondary, width=10)
 
+def render_abstract_business(ctx):
+    """Abstract Business: Bold diagonal + photo + dark panel + feature row."""
+    f = ctx['flyer']
+    d = ctx['draw']
+    w = ctx['width']
+    h = ctx['height']
+    c = ctx['config']
+
+    primary  = hex_to_rgb(c.get('primary_color', '#0076BC'))  # Codees Blue
+    accent   = hex_to_rgb(c.get('accent_color',  '#ED1C24'))  # Codees Red
+    dark     = (18, 18, 24)
+
+    # ── 1. White base ──────────────────────────────────────────────────────────
+    d.rectangle([0, 0, w, h], fill='#FFFFFF')
+
+    # ── 2. Hero Photo (right side, clipped with diagonal) ──────────────────────
+    photo_x = int(w * 0.30)   # photo starts here
+    img_path = c.get('image_path', '')
+    if img_path and os.path.exists(img_path):
+        img = Image.open(img_path)
+        img = resize_to_fill(img, w - photo_x, int(h * 0.60))
+        # Darken slightly
+        ov = Image.new('RGBA', img.size, (0, 0, 0, 50))
+        img = Image.alpha_composite(img.convert('RGBA'), ov).convert('RGB')
+        f.paste(img, (photo_x, 0))
+    else:
+        d.rectangle([photo_x, 0, w, int(h * 0.60)], fill='#1A2640')
+
+    # ── 3. Diagonal overlay (left accent block) ─────────────────────────────────
+    # Yellow/primary diagonal block: covers top-left, angled right
+    split_x   = int(w * 0.52)
+    split_top = int(h * 0.40)
+    d.polygon([
+        (0, 0), (split_x, 0),
+        (int(w * 0.32), split_top),
+        (0, split_top)
+    ], fill=primary)
+
+    # ── 4. Company name + logo top-left ────────────────────────────────────────
+    logo_path = c.get('logo_path', 'logo/image.png')
+    draw_logo(f, logo_path, (48, 36), size=(200, 90))
+
+    # ── 5. Bold Headline (white, over primary block) ───────────────────────────
+    font_h = get_font(c['default_font'], 80, bold=True)
+    headline = c.get('headline', 'CODEES\nCOMPANY').upper()
+    curr_y = int(h * 0.12)
+    for line in textwrap.wrap(headline, width=12):
+        d.text((50, curr_y), line, font=font_h, fill='#FFFFFF')
+        curr_y += int(font_h.size * 1.1)
+    # Red underline accent
+    d.rectangle([50, curr_y + 6, 50 + 100, curr_y + 12], fill=accent)
+
+    # ── 6. Geometric ornaments (top-right) ─────────────────────────────────────
+    def draw_rotated_square(draw, cx, cy, size, angle_deg, color, alpha=180):
+        """Draw a filled rotated square."""
+        overlay = Image.new('RGBA', f.size, (0, 0, 0, 0))
+        od = ImageDraw.Draw(overlay)
+        r = math.radians(angle_deg)
+        hs = size / 2
+        pts = [
+            (cx + hs * math.cos(r + math.pi/4 * i * 2),
+             cy + hs * math.sin(r + math.pi/4 * i * 2))
+            for i in range(4)
+        ]
+        od.polygon(pts, fill=(*dark, alpha))
+        f.paste(Image.alpha_composite(f.convert('RGBA'), overlay).convert('RGB'), (0, 0))
+
+    # Logo area top-right
+    logo_box_x = w - int(w * 0.30)
+    logo_box_y = int(h * 0.03)
+    logo_box_w = int(w * 0.28)
+    # Logo placeholder if no path
+    draw_logo(f, logo_path, (logo_box_x + logo_box_w // 2, logo_box_y + 30), size=(180, 80))
+
+    # Decorative rotated squares
+    draw_rotated_square(d, w - 60, 80, 70, 20, dark, 200)
+    draw_rotated_square(d, w - 110, 130, 45, 35, dark, 150)
+    draw_rotated_square(d, w - 40, 160, 30, 50, primary, 200)
+
+    # ── 7. Dark bottom panel ───────────────────────────────────────────────────
+    panel_y = int(h * 0.52)
+    d.rectangle([0, panel_y, w, h], fill=dark)
+
+    # Centered sub-headline
+    sub = c.get('sub_headline', 'ABSTRACT BUSINESS').upper()
+    font_sub = get_font(c['default_font'], 52, bold=True)
+    sub_w = font_sub.getlength(sub)
+    d.text(((w - sub_w) / 2, panel_y + 40), sub, font=font_sub, fill='#FFFFFF')
+
+    # Sub-tagline
+    tag = c.get('tagline', 'LOREM IPSUM DOLORES').upper()
+    font_tag2 = get_font(c['default_font'], 26)
+    tag_w = font_tag2.getlength(tag)
+    d.text(((w - tag_w) / 2, panel_y + 108), tag, font=font_tag2, fill=primary)
+
+    # Body text
+    body = c.get('body_text', 'Join the fastest-growing tech community in Cameroon. We connect developers, designers, and entrepreneurs to create impact.')
+    font_b = get_font(c['default_font'], 22)
+    draw_wrapped_text(d, body, font_b, '#CCCCCC', w * 0.76, w / 2, panel_y + 155, alignment='center', line_height=1.5)
+
+    # ── 8. Feature icons row ───────────────────────────────────────────────────
+    features = c.get('features') or [
+        {'icon': '●', 'title': 'COMMUNITY',    'desc': 'Connect with 1,000+ devs & builders across Africa'},
+        {'icon': '◆', 'title': 'MENTORSHIP',   'desc': 'Get paired with industry-leading tech mentors'},
+        {'icon': '✉', 'title': 'INCUBATION',   'desc': 'Turn your idea into a funded startup product'},
+    ]
+    icon_y   = panel_y + int(h * 0.30)
+    col_w    = w // len(features)
+    for i, feat in enumerate(features[:3]):
+        cx = col_w * i + col_w // 2
+        # Circle
+        r = 38
+        d.ellipse([cx - r, icon_y - r, cx + r, icon_y + r], outline=primary, width=3)
+        font_ic = get_font(c['default_font'], 34, bold=True)
+        ic_char = feat.get('icon', '●')
+        ic_w = font_ic.getlength(ic_char)
+        d.text((cx - ic_w / 2, icon_y - 24), ic_char, font=font_ic, fill=primary)
+        # Title
+        font_it = get_font(c['default_font'], 22, bold=True)
+        it_w = font_it.getlength(feat['title'])
+        d.text((cx - it_w / 2, icon_y + r + 12), feat['title'], font=font_it, fill='#FFFFFF')
+        # Desc
+        font_id = get_font(c['default_font'], 18)
+        draw_wrapped_text(d, feat.get('desc', ''), font_id, '#AAAAAA', col_w - 40, cx, icon_y + r + 46, alignment='center', line_height=1.35)
+
+    # ── 9. Social footer strip ─────────────────────────────────────────────────
+    footer_h = int(h * 0.052)
+    footer_y = h - footer_h
+    d.rectangle([0, footer_y, w, h], fill=primary)
+    font_f   = get_font(c['default_font'], 20, bold=True)
+    socials  = [
+        ('f', c.get('facebook',  '@codees')),
+        ('w', c.get('whatsapp', '+237 600 000 000')),
+        ('in', c.get('instagram', '@codees_cm')),
+        ('☎', c.get('phone',     'www.codees-cm.com')),
+    ]
+    seg_w  = w // len(socials)
+    for i, (icon, label) in enumerate(socials):
+        sx  = seg_w * i + seg_w // 2
+        txt = f'{icon}  {label}'
+        tw  = font_f.getlength(txt)
+        d.text((sx - tw / 2, footer_y + (footer_h - 24) // 2), txt, font=font_f, fill='#FFFFFF')
+
+
+def render_abstract_social(ctx):
+    """Abstract Social (1080x1080): Compact agency style for Instagram/LinkedIn."""
+    # Force square dimensions
+    w = 1080
+    h = 1080
+    ctx['width']  = w
+    ctx['height'] = h
+    ctx['flyer']  = Image.new('RGB', (w, h), '#FFFFFF')
+    ctx['draw']   = ImageDraw.Draw(ctx['flyer'])
+    f = ctx['flyer']
+    d = ctx['draw']
+    c = ctx['config']
+
+    primary = hex_to_rgb(c.get('primary_color', '#0076BC'))
+    accent  = hex_to_rgb(c.get('accent_color',  '#ED1C24'))
+    dark    = (18, 18, 24)
+
+    # 1. White base
+    d.rectangle([0, 0, w, h], fill='#FFFFFF')
+
+    # 2. Hero photo (top 55%)
+    photo_h = int(h * 0.55)
+    img_path = c.get('image_path', '')
+    if img_path and os.path.exists(img_path):
+        img = Image.open(img_path)
+        img = resize_to_fill(img, w, photo_h)
+        ov  = Image.new('RGBA', img.size, (0, 0, 0, 60))
+        img = Image.alpha_composite(img.convert('RGBA'), ov).convert('RGB')
+        f.paste(img, (0, 0))
+    else:
+        d.rectangle([0, 0, w, photo_h], fill='#1A2640')
+
+    # 3. Primary diagonal block (covers top-left)
+    diag_w = int(w * 0.55)
+    diag_h = int(h * 0.38)
+    d.polygon([
+        (0, 0), (diag_w, 0),
+        (int(w * 0.38), diag_h),
+        (0, diag_h)
+    ], fill=primary)
+
+    # 4. Logo top-left (on primary block)
+    logo_path = c.get('logo_path', 'logo/image.png')
+    draw_logo(f, logo_path, (40, 28), size=(180, 80))
+
+    # 5. Headline (on blue block)
+    font_h   = get_font(c['default_font'], 70, bold=True)
+    headline = c.get('headline', 'JOIN CODEES').upper()
+    curr_y   = int(h * 0.10)
+    for line in textwrap.wrap(headline, width=10):
+        d.text((44, curr_y), line, font=font_h, fill='#FFFFFF')
+        curr_y += int(font_h.size * 1.08)
+    d.rectangle([44, curr_y + 6, 44 + 80, curr_y + 12], fill=accent)
+
+    # 6. Top-right ornaments
+    def draw_diamond(cx_, cy_, size_, color_):
+        pts = [(cx_, cy_ - size_), (cx_ + size_, cy_), (cx_, cy_ + size_), (cx_ - size_, cy_)]
+        d.polygon(pts, fill=color_)
+    draw_diamond(w - 55, 55, 48, (*dark, 200))
+    draw_diamond(w - 100, 110, 30, (*dark, 140))
+    draw_diamond(w - 32, 120, 22, (*primary, 220))
+
+    # 7. Dark bottom panel
+    panel_y = int(h * 0.52)
+    d.rectangle([0, panel_y, w, h], fill=dark)
+
+    # Sub-headline centered
+    sub      = c.get('sub_headline', c.get('headline', 'CODEES COMMUNITY')).upper()
+    font_sub = get_font(c['default_font'], 46, bold=True)
+    sub_w    = font_sub.getlength(sub)
+    # Wrap if needed
+    sub_lines = textwrap.wrap(sub, width=18)
+    sy = panel_y + 30
+    for sl in sub_lines:
+        slw = font_sub.getlength(sl)
+        d.text(((w - slw) / 2, sy), sl, font=font_sub, fill='#FFFFFF')
+        sy += int(font_sub.size * 1.1)
+
+    # Tagline
+    tag      = c.get('tagline', "Cameroon's Premier Tech Community")
+    font_tag2 = get_font(c['default_font'], 26)
+    draw_wrapped_text(d, tag, font_tag2, primary, w * 0.8, w / 2, sy + 10, alignment='center', line_height=1.4)
+
+    # 8. CTA button area
+    cta_txt  = c.get('cta_text', 'www.codees-cm.com').lower()
+    font_cta = get_font(c['default_font'], 26, bold=True)
+    cta_w    = int(font_cta.getlength(cta_txt)) + 60
+    cta_x    = (w - cta_w) // 2
+    cta_y    = h - int(h * 0.155)
+    d.rounded_rectangle([cta_x, cta_y, cta_x + cta_w, cta_y + 56], radius=8, fill=primary)
+    tw2 = font_cta.getlength(cta_txt)
+    d.text((cta_x + (cta_w - tw2) / 2, cta_y + 14), cta_txt, font=font_cta, fill='#FFFFFF')
+
+    # 9. Social handles footer
+    footer_h2 = int(h * 0.062)
+    fy2       = h - footer_h2
+    d.rectangle([0, fy2, w, h], fill=primary)
+    font_f2   = get_font(c['default_font'], 21, bold=True)
+    socials   = [('f', c.get('facebook', '@codees')), ('in', c.get('instagram', '@codees_cm'))]
+    seg2      = w // (len(socials) + 1)
+    for i, (icon, label) in enumerate(socials, 1):
+        txt2 = f'{icon}  {label}'
+        tw3  = font_f2.getlength(txt2)
+        d.text((seg2 * i - tw3 / 2, fy2 + (footer_h2 - 26) // 2), txt2, font=font_f2, fill='#FFFFFF')
+
+    # Copy back to ctx
+    ctx['flyer'] = f
+
+
+
 def generate_flyer(params):
     config = DEFAULT_CONFIG.copy()
     config.update(params)
@@ -564,6 +819,12 @@ def generate_flyer(params):
         render_codees_minimal(ctx)
     elif tid == 'codees_hero':
         render_codees_hero(ctx)
+    elif tid == 'abstract_business':
+        render_abstract_business(ctx)
+    elif tid == 'abstract_social':
+        render_abstract_social(ctx)
+        # pick updated flyer from ctx after social template resizes it
+        flyer = ctx['flyer']
     else:
         render_modern_corporate(ctx)
 
