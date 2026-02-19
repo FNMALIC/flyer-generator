@@ -52,7 +52,6 @@ def generate_campaign():
                 "template_id": "zenith_modern",
                 "headline": "Level Up Your Tech Skills",
                 "tagline": "Expert-led workshops. Every week.",
-                "image_path": "image.png",
                 "cta_text": "www.codees-cm.com",
                 "features": [
                     {"title": "Live Q&A with Experts"},
@@ -86,7 +85,6 @@ def generate_campaign():
                 "template_id": "zenith_modern",
                 "headline": "Access Startup Funding in Africa",
                 "tagline": "We connect bold ideas with the capital they deserve.",
-                "image_path": "image.png",
                 "cta_text": "www.codees-cm.com",
                 "features": [
                     {"title": "Angel Investor Network"},
