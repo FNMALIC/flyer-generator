@@ -48,6 +48,24 @@ def test_templates():
     with open("test_social.png", "wb") as f:
         f.write(generate_flyer(p4).read())
 
+    # Test 5: Codees Minimal
+    print("Generating Codees Minimal...")
+    p5 = base_params.copy()
+    p5["template_id"] = "codees_minimal"
+    p5["headline"] = "The Hidden Crisis Behind Cameroon's Hustle Culture"
+    p5["tagline"] = "Mental health among entrepreneurs is the silent threat no one's talking about."
+    with open("test_codees_minimal.png", "wb") as f:
+        f.write(generate_flyer(p5).read())
+
+    # Test 6: Codees Hero
+    print("Generating Codees Hero...")
+    p6 = base_params.copy()
+    p6["template_id"] = "codees_hero"
+    p6["headline"] = "Digital Transformation in Traditional Industries"
+    p6["tagline"] = "Success Stories From Africa"
+    with open("test_codees_hero.png", "wb") as f:
+        f.write(generate_flyer(p6).read())
+
 if __name__ == "__main__":
     if not os.path.exists("image.png"):
         print("Error: image.png not found. Please ensure it exists in the root directory.")

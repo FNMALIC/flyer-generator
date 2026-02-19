@@ -4,16 +4,17 @@ DEFAULT_CONFIG = {
     # Layout & Sizing
     "flyer_width": 1200,
     "flyer_height": 1600,
-    "template_id": "zenith_modern", # "modern_corporate", "marketing_agency", "social_post", "zenith_modern"
+    "template_id": "codees_minimal", # "modern_corporate", "marketing_agency", "social_post", "zenith_modern", "codees_minimal", "codees_hero"
+    "logo_path": "logo/image.png",
     "image_ratio": 0.55,
     "padding": 80,
     "section_spacing": 50,
     
     # Background & Effects
     "bg_color": "#FDFDFD",
-    "primary_color": "#D35400",  # Professional Burnt Orange
-    "secondary_color": "#2C3E50", # Professional Midnight Blue
-    "accent_color": "#E67E22",
+    "primary_color": "#0076BC",  # Codees Blue
+    "secondary_color": "#111111",
+    "accent_color": "#ED1C24",   # Codees Red
     "shadow_enabled": True,
     "accents_enabled": True,
     

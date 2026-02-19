@@ -1,0 +1,90 @@
+{
+    "1_brand_awareness": {
+        "template_id": "codees_minimal",
+        "headline": "The Heart of Tech in Cameroon",
+        "tagline": "Fostering innovation and collaboration across Africa's tech ecosystem.",
+        "cta_text": "www.codees-cm.com"
+    },
+    "2_mentorship": {
+        "template_id": "codees_hero",
+        "headline": "Scale Your Career With Expert Mentors",
+        "tagline": "1:1 Guidance \u00b7 Industry Leaders \u00b7 Real Growth",
+        "image_path": "image.png",
+        "cta_text": "www.codees-cm.com"
+    },
+    "3_incubation": {
+        "template_id": "codees_minimal",
+        "headline": "From Idea to MVP \u2014 We Back You",
+        "tagline": "Join Cameroon's premier startup incubation program.",
+        "cta_text": "JOIN THE HUB"
+    },
+    "4_hackathon": {
+        "template_id": "codees_hero",
+        "headline": "Code. Create. Conquer.",
+        "tagline": "Annual Hackathon \u00b7 Teams \u00b7 Prizes",
+        "image_path": "image.png",
+        "cta_text": "www.codees-cm.com"
+    },
+    "5_workshops": {
+        "template_id": "zenith_modern",
+        "headline": "Level Up Your Tech Skills",
+        "tagline": "Expert-led workshops. Every week.",
+        "image_path": "image.png",
+        "cta_text": "www.codees-cm.com",
+        "features": [
+            {
+                "title": "Live Q&A with Experts"
+            },
+            {
+                "title": "Hands-On Projects"
+            },
+            {
+                "title": "Community Certificate"
+            }
+        ]
+    },
+    "6_entrepreneurship": {
+        "template_id": "codees_minimal",
+        "headline": "Build Your Startup in Cameroon",
+        "tagline": "Join a network of founders, engineers & investors.",
+        "cta_text": "CONNECT NOW"
+    },
+    "7_mentors_recruitment": {
+        "template_id": "codees_hero",
+        "headline": "Become a Codees Mentor",
+        "tagline": "Share Expertise \u00b7 Grow Leaders \u00b7 Shape Africa's Tech Future",
+        "image_path": "image.png",
+        "cta_text": "www.codees-cm.com"
+    },
+    "8_funding": {
+        "template_id": "zenith_modern",
+        "headline": "Access Startup Funding in Africa",
+        "tagline": "We connect bold ideas with the capital they deserve.",
+        "image_path": "image.png",
+        "cta_text": "www.codees-cm.com",
+        "features": [
+            {
+                "title": "Angel Investor Network"
+            },
+            {
+                "title": "Pitch Training & Coaching"
+            },
+            {
+                "title": "Grant & Funding Access"
+            }
+        ]
+    },
+    "9_projects": {
+        "template_id": "codees_minimal",
+        "headline": "Building Cameroon's Digital Future, Together",
+        "tagline": "Open-source projects powered by the Codees community.",
+        "cta_text": "EXPLORE PROJECTS"
+    },
+    "10_impact": {
+        "template_id": "codees_hero",
+        "headline": "Real Impact. Real Stories.",
+        "tagline": "Success \u00b7 Innovation \u00b7 Community",
+        "image_path": "image.png",
+        "cta_text": "www.codees-cm.com"
+    }
+}

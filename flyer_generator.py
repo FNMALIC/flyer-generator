@@ -113,6 +113,22 @@ def draw_wrapped_text(draw, text, font, color, max_width, x_center, y_start, ali
         curr_y += line_spacing
     return curr_y
 
+def draw_logo(image, logo_path, position, size=(150, 150)):
+    """Helper to draw the logo at a specific position."""
+    if not logo_path or not os.path.exists(logo_path):
+        return
+    try:
+        logo = Image.open(logo_path).convert("RGBA")
+        logo.thumbnail(size, Image.Resampling.LANCZOS)
+        # Handle centering if position is (w/2, y)
+        if isinstance(position[0], float) or position[0] == image.width / 2:
+            x = int(position[0] - logo.width / 2)
+        else:
+            x = position[0]
+        image.paste(logo, (int(x), int(position[1])), logo)
+    except Exception as e:
+        print(f"Error drawing logo: {e}")
+
 def resize_to_fill(img, target_w, target_h):
     img_w, img_h = img.size
     ratio = max(target_w / img_w, target_h / img_h)
@@ -264,65 +280,187 @@ def render_zenith_modern(ctx):
     w = ctx['width']
     h = ctx['height']
     c = ctx['config']
-    
-    primary = hex_to_rgb(c.get('primary_color', '#D35400'))
-    secondary = hex_to_rgb(c.get('secondary_color', '#2C3E50'))
-    
-    # 1. Full-bleed Background Image with Vignette
-    if 'image_path' in c and os.path.exists(c['image_path']):
-        img = Image.open(c['image_path'])
+
+    primary   = hex_to_rgb(c.get('primary_color', '#0076BC'))
+    accent    = hex_to_rgb(c.get('accent_color',  '#ED1C24'))
+
+    # 1. Full-bleed Background Image with dark vignette
+    img_path = c.get('image_path', '')
+    if img_path and os.path.exists(img_path):
+        img = Image.open(img_path)
         img = resize_to_fill(img, w, h)
-        # Apply a dark overlay vignette
-        overlay = Image.new('RGBA', (w, h), (0, 0, 0, 100))
+        overlay = Image.new('RGBA', (w, h), (0, 0, 0, 120))
         img = Image.alpha_composite(img.convert('RGBA'), overlay)
         f.paste(img, (0, 0))
     else:
-        d.rectangle([0, 0, w, h], fill="#2C3E50")
+        d.rectangle([0, 0, w, h], fill='#0D1B2A')
 
-    # 2. Large Minimalist Title (Directly on image, or on glass)
-    padding = int(w * 0.1)
+    # 2. Glassmorphism card – centered vertically, left-aligned with safe padding
+    padding   = int(w * 0.08)
+    card_w    = int(w * 0.52)
+    card_h    = int(h * 0.68)
+    card_x    = padding
+    card_y    = (h - card_h) // 2
+
+    draw_glass_rect(f, (card_x, card_y, card_x + card_w, card_y + card_h),
+                    fill=(255, 255, 255, 38), blur_radius=25)
+
+    # 3. Logo inside card – top-left of card
+    logo_path = c.get('logo_path', 'logo/image.png')
+    draw_logo(f, logo_path, (card_x + 50, card_y + 40), size=(200, 90))
+
+    # 4. Thin vertical accent bar
+    inner_x   = card_x + 50
+    bar_top   = card_y + 155
+    d.rectangle([inner_x, bar_top, inner_x + 4, bar_top + int(card_h * 0.38)], fill=primary)
+
+    # 5. Headline
+    font_h    = get_font(c['default_font'], 62, bold=True)
+    text_x    = inner_x + 24
+    text_w    = card_w - 90
+    cy = draw_wrapped_text(d, c.get('headline', 'LEVEL UP TODAY').upper(),
+                           font_h, '#FFFFFF', text_w,
+                           text_x + text_w / 2, bar_top,
+                           alignment='left', line_height=1.08)
+
+    # 6. Tagline
+    font_tag  = get_font(c['default_font'], 26)
+    cy += 20
+    draw_wrapped_text(d, c.get('tagline', 'Expert-led workshops. Every week.'),
+                      font_tag, (*accent, 255), text_w,
+                      text_x + text_w / 2, cy,
+                      alignment='left', line_height=1.3)
+
+    # 7. Feature bullets (use Codees-relevant defaults)
+    default_features = [
+        {'title': 'LIVE Q&A WITH EXPERTS'},
+        {'title': 'HANDS-ON PROJECTS'},
+        {'title': 'COMMUNITY SUPPORT'},
+    ]
+    features = c.get('features') or default_features
+    dot_y = card_y + int(card_h * 0.67)
+    for item in features[:3]:
+        d.ellipse([inner_x, dot_y + 8, inner_x + 10, dot_y + 18], fill=primary)
+        font_f = get_font(c['default_font'], 20, bold=True)
+        d.text((inner_x + 22, dot_y), item.get('title', '').upper(), font=font_f, fill='#FFFFFF')
+        dot_y += 44
+
+    # 8. Bottom separator + CTA
+    sep_y = card_y + card_h - 90
+    draw_accent_line(d, (inner_x, sep_y), (card_x + card_w - 50, sep_y), '#FFFFFF', opacity=80)
+    font_cta = get_font(c['default_font'], 22, bold=True)
+    cta = c.get('cta_text', 'www.codees-cm.com').lower()
+    d.text((inner_x, sep_y + 14), cta, font=font_cta, fill='#FFFFFF')
+
+def render_codees_minimal(ctx):
+    """Codees Clean: Minimalist white design with centered logo and accent bars."""
+    f = ctx['flyer']
+    d = ctx['draw']
+    w = ctx['width']
+    h = ctx['height']
+    c = ctx['config']
     
-    # Glassmorphism Card
-    card_w = int(w * 0.45)
-    card_h = int(h * 0.7)
-    card_x = padding
-    card_y = (h - card_h) / 2
+    primary = hex_to_rgb(c.get('primary_color', '#0076BC')) # Blue
+    accent = hex_to_rgb(c.get('accent_color', '#ED1C24'))   # Red
     
-    draw_glass_rect(f, (int(card_x), int(card_y), int(card_x + card_w), int(card_y + card_h)), fill=(255, 255, 255, 40))
+    # 1. White Background
+    d.rectangle([0, 0, w, h], fill="#FFFFFF")
     
-    # 3. Content in Glass Card
-    cy = card_y + 80
+    # 2. Logo (Centered at top)
+    logo_path = c.get('logo_path', 'logo/image.png')
+    draw_logo(f, logo_path, (w/2, 80), size=(300, 150))
     
-    # Company Name
-    font_c = get_font(c['default_font'], 32, bold=True)
-    d.text((card_x + 60, cy), c.get('company_name', 'CORE').upper(), font=font_c, fill="#FFFFFF")
-    cy += 60
-    
-    # Vertical accent line
-    d.rectangle([card_x + 60, cy, card_x + 64, cy + 300], fill=primary)
-    
-    # Headline (Bold, high-impact)
-    font_h = get_font(c['default_font'], 70, bold=True)
-    cy = draw_wrapped_text(d, c.get('headline', 'ZENITH\nDESIGN').upper(), font_h, "#FFFFFF", card_w - 120, card_x + 85, cy + 20, alignment="left", line_height=1.1)
+    # 3. Main Content
+    curr_y = 350
+    # Large Headline
+    font_h = get_font(c['default_font'], 90, bold=True)
+    curr_y = draw_wrapped_text(d, c.get('headline', 'The Hidden Crisis').upper(), font_h, "#000000", w * 0.8, w/2, curr_y, alignment="center")
     
     # Tagline
-    font_tag = get_font(c['default_font'], 24)
-    d.text((card_x + 85, cy + 40), c.get('tagline', 'MINIMALISM DEFINED'), font=font_tag, fill=primary)
+    curr_y += 40
+    font_tag = get_font(c['default_font'], 32)
+    curr_y = draw_wrapped_text(d, c.get('tagline', 'Mental health among entrepreneurs'), font_tag, "#333333", w * 0.7, w/2, curr_y, alignment="center")
     
-    # 4. Features (Minimalist dots)
-    cy = card_y + card_h * 0.65
-    features = c.get('features', [])
-    for item in features[:3]:
-        # Minimalist dot
-        d.ellipse([card_x + 85, cy + 10, card_x + 95, cy + 20], fill=primary)
-        font_f = get_font(c['default_font'], 18, bold=True)
-        d.text((card_x + 115, cy), item.get('title', '').upper(), font=font_f, fill="#FFFFFF")
-        cy += 40
+    # 4. Accent Bars (Bottom)
+    bar_h = 60
+    # Red bar (slanted end)
+    d.polygon([(0, h - bar_h - 80), (w * 0.65, h - bar_h - 80), (w * 0.6, h - 80), (0, h - 80)], fill=accent)
+    # Blue bar (footer)
+    d.rectangle([0, h - bar_h, w, h], fill=primary)
+    
+    # 5. Footer Details
+    font_f = get_font(c['default_font'], 24, bold=True)
+    # Social handles (left)
+    d.text((100, h - bar_h + 15), "f  i  in  @codees", font=font_f, fill="#FFFFFF")
+    # URL (right)
+    url_t = c.get('cta_text', 'www.codees-cm.com').lower()
+    url_w = font_f.getlength(url_t)
+    d.text((w - 100 - url_w, h - bar_h + 15), url_t, font=font_f, fill="#FFFFFF")
 
-    # 5. Bottom Call to Action (Floating on glass)
-    draw_accent_line(d, (card_x + 60, card_y + card_h - 100), (card_x + card_w - 60, card_y + card_h - 100), "#FFFFFF", opacity=100)
-    font_cta = get_font(c['default_font'], 22, bold=True)
-    d.text((card_x + 85, card_y + card_h - 70), c.get('cta_text', 'WWW.ZENITH.COM'), font=font_cta, fill="#FFFFFF")
+def render_codees_hero(ctx):
+    """Codees Hero v2: Full-bleed image, gradient anchor, clean hierarchy."""
+    f = ctx['flyer']
+    d = ctx['draw']\
+
+    w = ctx['width']
+    h = ctx['height']
+    c = ctx['config']
+
+    primary = hex_to_rgb(c.get('primary_color', '#0076BC'))
+    accent  = hex_to_rgb(c.get('accent_color',  '#ED1C24'))
+
+    # 1. Hero Image (or dark background)
+    img_path = c.get('image_path', '')
+    if img_path and os.path.exists(img_path):
+        img = Image.open(img_path)
+        img = resize_to_fill(img, w, h)
+        f.paste(img, (0, 0))
+    else:
+        d.rectangle([0, 0, w, h], fill='#1A1A2E')
+
+    # 2. Gradient overlay – dark from bottom, fades up (ensures legibility)
+    gradient = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+    gd = ImageDraw.Draw(gradient)
+    for i in range(h):
+        alpha = int(220 * (i / h) ** 1.4)   # stronger at bottom
+        gd.line([(0, i), (w, i)], fill=(0, 0, 0, alpha))
+    f.paste(Image.alpha_composite(f.convert('RGBA'), gradient).convert('RGB'), (0, 0))
+
+    # 3. Thin top bar (brand accent, 8 px)
+    d.rectangle([0, 0, w, 8], fill=primary)
+
+    # 4. Logo – top-left with safe padding
+    logo_path = c.get('logo_path', 'logo/image.png')
+    draw_logo(f, logo_path, (60, 30), size=(160, 90))
+
+    # 5. Headline block – bottom-left anchor
+    padding_x = int(w * 0.07)
+    baseline  = h - int(h * 0.12)          # 12 % from bottom
+
+    headline  = c.get('headline', 'DIGITAL TRANSFORMATION').upper()
+    tagline   = c.get('tagline',  'SUCCESS STORIES FROM AFRICA').upper()
+
+    font_tag  = get_font(c['default_font'], 30, bold=True)
+    font_h    = get_font(c['default_font'], 88, bold=True)
+
+    # Small accent category label above headline
+    tag_y = baseline - int(font_h.size * 1.2 * len(textwrap.wrap(headline, 16))) - 80
+    d.text((padding_x, tag_y), tagline, font=font_tag, fill=(*accent, 255))
+    draw_accent_line(d, (padding_x, tag_y + 44), (padding_x + 200, tag_y + 44), accent, width=3)
+
+    # Main headline (white, bold)
+    draw_wrapped_text(d, headline, font_h, '#FFFFFF', w * 0.75,
+                      padding_x + (w * 0.75) / 2, tag_y + 68,
+                      alignment='left', line_height=1.05)
+
+    # 6. Footer strip
+    footer_h = int(h * 0.065)
+    d.rectangle([0, h - footer_h, w, h], fill=(*primary, 230))
+    font_f   = get_font(c['default_font'], 24, bold=True)
+    cta      = c.get('cta_text', 'WWW.CODEES-CM.COM').lower()
+    cta_w    = font_f.getlength(cta)
+    d.text((padding_x, h - footer_h + (footer_h - 28) // 2), 'f  i  in  @codees', font=font_f, fill='#FFFFFF')
+    d.text((w - padding_x - cta_w,  h - footer_h + (footer_h - 28) // 2), cta, font=font_f, fill='#FFFFFF')
 def render_social_post(ctx):
     f = ctx['flyer']
     d = ctx['draw']
@@ -422,6 +560,10 @@ def generate_flyer(params):
         render_social_post(ctx)
     elif tid == 'zenith_modern':
         render_zenith_modern(ctx)
+    elif tid == 'codees_minimal':
+        render_codees_minimal(ctx)
+    elif tid == 'codees_hero':
+        render_codees_hero(ctx)
     else:
         render_modern_corporate(ctx)
 
