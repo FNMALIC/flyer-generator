@@ -811,6 +811,21 @@ def generate_flyer(params):
     config = DEFAULT_CONFIG.copy()
     config.update(params)
     
+    # Map template names to template_ids
+    template_mapping = {
+        'template_1': 'marketing_agency',
+        'template_2': 'social_post', 
+        'template_3': 'zenith_modern',
+        'template_4': 'codees_minimal',
+        'logo': 'codees_hero'
+    }
+    
+    # If template is specified, map it to template_id
+    if 'template' in params:
+        template_name = params['template']
+        if template_name in template_mapping:
+            config['template_id'] = template_mapping[template_name]
+    
     if isinstance(config.get('features'), str):
         try: config['features'] = json.loads(config['features'])
         except: pass
