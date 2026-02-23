@@ -373,14 +373,40 @@ def render_codees_minimal(ctx):
     
     # 3. Main Content
     curr_y = 350
-    # Large Headline
-    font_h = get_font(c['default_font'], 90, bold=True)
-    curr_y = draw_wrapped_text(d, c.get('headline', 'The Hidden Crisis').upper(), font_h, "#000000", w * 0.8, w/2, curr_y, alignment="center")
     
-    # Tagline
-    curr_y += 40
-    font_tag = get_font(c['default_font'], 32)
-    curr_y = draw_wrapped_text(d, c.get('tagline', 'Mental health among entrepreneurs'), font_tag, "#333333", w * 0.7, w/2, curr_y, alignment="center")
+    # Company Name
+    if c.get('company_name'):
+        font_company = get_font(c['default_font'], int(c.get('company_font_size', 42)), bold=True)
+        company_color = c.get('company_font_color', '#0076BC')
+        curr_y = draw_wrapped_text(d, c['company_name'], font_company, company_color, w * 0.8, w/2, curr_y, alignment="center")
+        curr_y += 30
+    
+    # Large Headline
+    font_h = get_font(c['default_font'], int(c.get('headline_font_size', 60)), bold=True)
+    headline_color = c.get('headline_font_color', '#000000')
+    curr_y = draw_wrapped_text(d, c.get('headline', 'The Hidden Crisis'), font_h, headline_color, w * 0.8, w/2, curr_y, alignment="center")
+    
+    # Body Text
+    if c.get('body_text'):
+        curr_y += 40
+        font_body = get_font(c['default_font'], int(c.get('body_font_size', 24)))
+        body_color = c.get('body_font_color', '#333333')
+        curr_y = draw_wrapped_text(d, c['body_text'], font_body, body_color, w * 0.7, w/2, curr_y, alignment="center")
+    
+    # Contact Information
+    contact_y = h - 200
+    if c.get('contact_website') or c.get('contact_email') or c.get('contact_phone'):
+        font_contact = get_font(c['default_font'], int(c.get('contact_font_size', 20)))
+        contact_color = c.get('contact_font_color', '#666666')
+        
+        if c.get('contact_website'):
+            contact_y = draw_wrapped_text(d, c['contact_website'], font_contact, contact_color, w * 0.8, w/2, contact_y, alignment="center")
+            contact_y += 25
+        if c.get('contact_email'):
+            contact_y = draw_wrapped_text(d, c['contact_email'], font_contact, contact_color, w * 0.8, w/2, contact_y, alignment="center")
+            contact_y += 25
+        if c.get('contact_phone'):
+            contact_y = draw_wrapped_text(d, c['contact_phone'], font_contact, contact_color, w * 0.8, w/2, contact_y, alignment="center")
     
     # 4. Accent Bars (Bottom)
     bar_h = 60
