@@ -27,22 +27,22 @@ def cleanup_files(file_paths):
 def generate_flyer_endpoint():
     temp_files = []
     try:
-        # Check if main image is present
-        if 'image' not in request.files:
-            return jsonify({"error": "Missing required 'image' file"}), 400
-        
-        main_image = request.files['image']
-        if main_image.filename == '':
-            return jsonify({"error": "No selected file for 'image'"}), 400
-        
-        if not allowed_file(main_image.filename):
-            return jsonify({"error": "Invalid file type for 'image'"}), 400
+        # Check if main image is present, use default if not
+        if 'image' not in request.files or request.files['image'].filename == '':
+            # Use default image.png
+            img_path = os.path.join(os.path.dirname(__file__), 'image.png')
+            if not os.path.exists(img_path):
+                return jsonify({"error": "Default image not found and no image provided"}), 400
+        else:
+            main_image = request.files['image']
+            if not allowed_file(main_image.filename):
+                return jsonify({"error": "Invalid file type for 'image'"}), 400
 
-        # Save main image
-        img_filename = secure_filename(f"{uuid.uuid4()}_{main_image.filename}")
-        img_path = os.path.join(app.config['UPLOAD_FOLDER'], img_filename)
-        main_image.save(img_path)
-        temp_files.append(img_path)
+            # Save main image
+            img_filename = secure_filename(f"{uuid.uuid4()}_{main_image.filename}")
+            img_path = os.path.join(app.config['UPLOAD_FOLDER'], img_filename)
+            main_image.save(img_path)
+            temp_files.append(img_path)
 
         # Background image (optional)
         bg_image_path = None
