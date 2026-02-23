@@ -23,17 +23,38 @@ def cleanup_files(file_paths):
             except Exception as e:
                 app.logger.error(f"Error deleting file {path}: {e}")
 
+@app.route('/templates', methods=['GET'])
+def list_templates():
+    """List available templates in the template folder."""
+    try:
+        template_dir = os.path.join(os.path.dirname(__file__), 'template')
+        if not os.path.exists(template_dir):
+            return jsonify({"templates": []})
+        
+        templates = []
+        for file in os.listdir(template_dir):
+            if file.lower().endswith(('.png', '.jpg', '.jpeg')):
+                template_name = os.path.splitext(file)[0]
+                templates.append(template_name)
+        
+        return jsonify({"templates": sorted(templates)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/generate-flyer', methods=['POST'])
 def generate_flyer_endpoint():
     temp_files = []
     try:
-        # Check if main image is present, use default if not
-        if 'image' not in request.files or request.files['image'].filename == '':
-            # Use default image.png
-            img_path = os.path.join(os.path.dirname(__file__), 'image.png')
-            if not os.path.exists(img_path):
-                return jsonify({"error": "Default image not found and no image provided"}), 400
-        else:
+        # Check for template selection first
+        template_name = request.form.get('template')
+        if template_name:
+            # Use template from template folder
+            template_path = os.path.join(os.path.dirname(__file__), 'template', f"{template_name}.png")
+            if not os.path.exists(template_path):
+                return jsonify({"error": f"Template '{template_name}' not found"}), 400
+            img_path = template_path
+        elif 'image' in request.files and request.files['image'].filename != '':
+            # Use uploaded image
             main_image = request.files['image']
             if not allowed_file(main_image.filename):
                 return jsonify({"error": "Invalid file type for 'image'"}), 400
@@ -43,6 +64,11 @@ def generate_flyer_endpoint():
             img_path = os.path.join(app.config['UPLOAD_FOLDER'], img_filename)
             main_image.save(img_path)
             temp_files.append(img_path)
+        else:
+            # Use default image.png as fallback
+            img_path = os.path.join(os.path.dirname(__file__), 'image.png')
+            if not os.path.exists(img_path):
+                return jsonify({"error": "No template, image, or default image found"}), 400
 
         # Background image (optional)
         bg_image_path = None
