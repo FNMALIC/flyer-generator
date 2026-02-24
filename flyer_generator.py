@@ -321,8 +321,11 @@ def render_zenith_modern(ctx):
     is_landscape = w > h
 
     # 1. Background
+    bg_path = c.get('bg_image_path', '')
+    is_light = c.get('bg_color', '').upper() == '#FFFFFF' or 'template' in bg_path
+    
     if not c.get('bg_image_path'):
-        d.rectangle([0, 0, w, h], fill='#0D1B2A')
+        d.rectangle([0, 0, w, h], fill='#0D1B2A' if not is_light else '#FFFFFF')
     
     # 2. Main Hero Image (if provided)
     img_path = c.get('image_path', '')
@@ -345,13 +348,17 @@ def render_zenith_modern(ctx):
         card_w, card_h = int(w * 0.9), int(h * 0.65)
         card_x, card_y = int(w * 0.05), int(h * 0.3)
 
+    # Use darker card if background is light
+    card_fill = (255, 255, 255, 30) if not is_light else (15, 23, 42, 220)
     draw_glass_rect(f, (card_x, card_y, card_x + card_w, card_y + card_h),
-                    fill=(255, 255, 255, 25), blur_radius=20)
+                    fill=card_fill, blur_radius=20)
 
     # 4. Content inside card
     inner_padding = 60
     curr_x = card_x + inner_padding
     curr_y = card_y + 40
+    
+    text_color = "#FFFFFF" # All glass cards now use white text for simplicity/contrast
     
     # Logo
     logo_path = c.get('logo_path', 'logo/image.png')
@@ -362,7 +369,7 @@ def render_zenith_modern(ctx):
     font_h_size = int(card_h * 0.15) if is_landscape else int(card_h * 0.12)
     font_h = get_font(c['default_font'], font_h_size, bold=True)
     headline = c.get('headline', 'ELEVATING STANDARDS').upper()
-    curr_y = draw_wrapped_text(d, headline, font_h, "#FFFFFF", card_w - 2*inner_padding, curr_x, curr_y, alignment="left", line_height=0.95)
+    curr_y = draw_wrapped_text(d, headline, font_h, text_color, card_w - 2*inner_padding, curr_x, curr_y, alignment="left", line_height=0.95)
     
     # Body or Features
     curr_y += 20
@@ -385,48 +392,62 @@ def render_zenith_modern(ctx):
     d.text((curr_x, footer_y), cta_text, font=font_cta, fill=primary)
 
 def render_codees_minimal(ctx):
-    """Codees Clean v2: Sophisticated minimalist design with refined typography."""
+    """Codees Clean v2: Sophisticated minimalist design, now asset-aware."""
     f = ctx['flyer']
     d = ctx['draw']
     w = ctx['width']
     h = ctx['height']
     c = ctx['config']
     
-    primary = hex_to_rgb(c.get('primary_color', '#0076BC')) # Blue
-    accent = hex_to_rgb(c.get('accent_color', '#ED1C24'))   # Red
-    padding = int(w * 0.1)
+    primary = hex_to_rgb(c.get('primary_color', '#0076BC'))
+    accent = hex_to_rgb(c.get('accent_color', '#ED1C24'))
     
-    # 1. White Background
+    # Detect if we are using Template 4 (Pointing Woman on the right)
+    bg_path = c.get('bg_image_path', '')
+    is_template_4 = 'template_4' in bg_path
+    
+    padding = int(w * 0.08)
+    content_w = int(w * 0.55) if is_template_4 else int(w * 0.8)
+    alignment = "left" if is_template_4 else "center"
+    text_x = padding + (content_w / 2) if is_template_4 else w / 2
+    
+    # 1. Background
     if not c.get('bg_image_path'):
         d.rectangle([0, 0, w, h], fill="#FFFFFF")
     
-    # 2. Logo (Centered at top)
+    # 2. Content overlay for readability (Glassmorphism if template_4)
+    if is_template_4:
+        draw_glass_rect(f, (0, 0, content_w + padding, h), fill=(255, 255, 255, 180), blur_radius=5)
+
+    # 3. Logo
     logo_path = c.get('logo_path', 'logo/image.png')
-    draw_logo(f, logo_path, (w/2, 60), size=(250, 120))
+    logo_pos = (padding + 100, 80) if is_template_4 else (w/2, 80)
+    draw_logo(f, logo_path, logo_pos, size=(220, 100))
     
-    # 3. Content Block
+    # 4. Content Block
     curr_y = 280
     
     # Decorative Top Accent
-    d.rectangle([w/2 - 40, curr_y, w/2 + 40, curr_y + 4], fill=accent)
+    accent_x = padding if is_template_4 else w/2 - 40
+    d.rectangle([accent_x, curr_y, accent_x + 80, curr_y + 4], fill=accent)
     curr_y += 40
     
-    # Headline (Elegant & Balanced)
+    # Headline
     font_h_size = int(h * 0.08)
     font_h = get_font(c['default_font'], font_h_size, bold=True)
     headline_color = c.get('headline_font_color', '#1A1A1A')
-    curr_y = draw_wrapped_text(d, c.get('headline', 'BUILD THE FUTURE'), font_h, headline_color, w * 0.8, w/2, curr_y, alignment="center", line_height=1.0)
+    curr_y = draw_wrapped_text(d, c.get('headline', 'BUILD THE FUTURE'), font_h, headline_color, content_w, text_x, curr_y, alignment=alignment, line_height=1.0)
     
-    # Body Text (Clean spacing)
+    # Body Text
     if c.get('body_text'):
         curr_y += 30
         font_body = get_font(c['default_font'], int(h * 0.025))
         body_color = c.get('body_font_color', '#444444')
-        curr_y = draw_wrapped_text(d, c['body_text'], font_body, body_color, w * 0.7, w/2, curr_y, alignment="center", line_height=1.5)
+        curr_y = draw_wrapped_text(d, c['body_text'], font_body, body_color, content_w - padding, text_x, curr_y, alignment=alignment, line_height=1.5)
     
-    # 4. Refined Footer
+    # 5. Refined Footer
     footer_y = h - 180
-    draw_accent_line(d, (padding, footer_y), (w - padding, footer_y), "#EEEEEE", width=1)
+    draw_accent_line(d, (padding, footer_y), (padding + content_w, footer_y), "#EEEEEE", width=1)
     
     # Contact Details
     contact_y = footer_y + 30
@@ -436,13 +457,12 @@ def render_codees_minimal(ctx):
     contact_parts = []
     if c.get('contact_website'): contact_parts.append(c['contact_website'])
     if c.get('contact_email'): contact_parts.append(c['contact_email'])
-    if c.get('contact_phone'): contact_parts.append(c['contact_phone'])
     
     if contact_parts:
         contact_text = "  |  ".join(contact_parts)
-        draw_wrapped_text(d, contact_text, font_contact, contact_color, w * 0.9, w/2, contact_y, alignment="center")
+        draw_wrapped_text(d, contact_text, font_contact, contact_color, content_w, text_x, contact_y, alignment=alignment)
 
-    # 5. Subtle Branding Accent
+    # 6. Subtle Branding Accent
     bar_h = 10
     d.rectangle([0, h - bar_h, w, h], fill=primary)
     d.rectangle([0, h - bar_h - 5, w * 0.3, h - bar_h], fill=accent)
@@ -512,70 +532,73 @@ def render_codees_hero(ctx):
     d.text((padding_x, h - footer_h + (footer_h - 28) // 2), 'f  i  in  @codees', font=font_f, fill='#FFFFFF')
     d.text((w - padding_x - cta_w,  h - footer_h + (footer_h - 28) // 2), cta, font=font_f, fill='#FFFFFF')
 def render_social_post(ctx):
+    """Social Post: Clean centered design, tailored for Template 2 (Branding)."""
     f = ctx['flyer']
     d = ctx['draw']
     w = ctx['width']
     h = ctx['height']
     c = ctx['config']
     
-    primary = hex_to_rgb(c.get('primary_color', '#D35400'))
-    secondary = hex_to_rgb(c.get('secondary_color', '#2C3E50'))
-    padding = int(w * 0.08)
-
-    # 1. Background split
+    primary = hex_to_rgb(c.get('primary_color', '#0076BC'))
+    secondary = hex_to_rgb(c.get('secondary_color', '#1A1A1A'))
+    
+    # Detect Template 2
+    bg_path = c.get('bg_image_path', '')
+    is_template_2 = 'template_2' in bg_path
+    
+    padding = int(w * 0.1)
+    
+    # 1. Background
     if not c.get('bg_image_path'):
-        d.rectangle([0, 0, w, h], fill="#FFFFFF")
-    if c.get('accents_enabled', True):
-        draw_geometric_pattern(f, secondary, type="dots")
+        d.rectangle([0, 0, w, h], fill="#F8FAFC")
+        if c.get('accents_enabled', True):
+            draw_geometric_pattern(f, (0, 118, 188, 40), type="dots")
     
-    # 2. Hero Image inside a large geometric frame
-    if 'image_path' in c and os.path.exists(c['image_path']):
-        img_size = int(w * 0.85)
-        img = Image.open(c['image_path'])
-        img = resize_to_fill(img, img_size, int(h * 0.5))
+    # 2. Main Content
+    if is_template_2:
+        # For Template 2, we focus on centered quote/text in the middle area
+        curr_y = int(h * 0.35)
+        text_w = int(w * 0.75)
+        alignment = "center"
+        text_x = w / 2
+    else:
+        # Standard social post with image support
+        if 'image_path' in c and os.path.exists(c['image_path']):
+            img_h = int(h * 0.45)
+            img = Image.open(c['image_path'])
+            img = resize_to_fill(img, w, img_h)
+            f.paste(img, (0, 0))
+            curr_y = img_h + 60
+        else:
+            curr_y = int(h * 0.25)
         
-        ix, iy = int(w * 0.075), int(h * 0.05)
+        text_w = w - 2*padding
+        alignment = "center"
+        text_x = w / 2
+
+    # Headline/Quote
+    font_h_size = int(h * 0.07) if is_template_2 else int(h * 0.06)
+    font_h = get_font(c['default_font'], font_h_size, bold=True)
+    headline = c.get('headline', 'BE INSPIRED').upper()
+    curr_y = draw_wrapped_text(d, headline, font_h, secondary, text_w, text_x, curr_y, alignment=alignment, line_height=1.1)
+    
+    # Body/Tagline
+    curr_y += 30
+    body_text = c.get('body_text', c.get('tagline', ''))
+    if body_text:
+        font_body = get_font(c['default_font'], int(h * 0.03))
+        curr_y = draw_wrapped_text(d, body_text, font_body, primary, text_w, text_x, curr_y, alignment=alignment, line_height=1.4)
+
+    # 3. Dynamic Footer/CTA
+    if not is_template_2:
+        # Only draw extra footer if not using the branded template
+        footer_bh = 10
+        d.rectangle([0, h - footer_bh, w, h], fill=primary)
         
-        if c.get('shadow_enabled', True):
-            def frame_shadow(sd, offset):
-                sd.rectangle([ix + offset[0], iy + offset[1], ix + img_size + offset[0], iy + int(h * 0.5) + offset[1]], fill=(0, 0, 0, 80))
-            draw_drop_shadow(f, frame_shadow, offset=(15, 15))
-            
-        f.paste(img, (ix, iy))
-        # Accent bar
-        d.rectangle([ix, iy + int(h * 0.5), ix + img_size, iy + int(h * 0.5) + 15], fill=primary)
-
-    # 3. Main Headline Block
-    curr_y = int(h * 0.6)
-    font_h = get_font(c['default_font'], int(w * 0.08), bold=True)
-    curr_y = draw_wrapped_text(d, c.get('headline', 'BOOST YOUR GROWTH').upper(), font_h, secondary, w - 2*padding, w/2, curr_y, alignment="center")
-    
-    curr_y += 20
-    font_tag = get_font(c['default_font'], int(w * 0.04), bold=True)
-    curr_y = draw_wrapped_text(d, c.get('tagline', 'MODERN SOLUTIONS').upper(), font_tag, primary, w - 2*padding, w/2, curr_y, alignment="center")
-
-    # 4. CTA Button
-    btn_w, btn_h = int(w * 0.6), 80
-    bx, by = (w - btn_w)/2, h - 180
-    
-    if c.get('shadow_enabled', True):
-        def btn_shadow(sd, offset):
-            sd.rectangle([bx + offset[0], by + offset[1], bx + btn_w + offset[0], by + btn_h + offset[1]], fill=(0, 0, 0, 50))
-        draw_drop_shadow(f, btn_shadow, offset=(8, 8), iterations=8)
-        
-    d.rectangle([bx, by, bx + btn_w, by + btn_h], fill=secondary)
-    
-    font_cta = get_font(c['default_font'], 26, bold=True)
-    cta_t = c.get('cta_text', 'LEARN MORE').upper()
-    t_width = font_cta.getlength(cta_t)
-    d.text((w/2 - t_width/2, by + 25), cta_t, font=font_cta, fill=primary)
-
-    # 5. Decorative corners
-    corner_size = 100
-    d.line([(0, 0), (corner_size, 0)], fill=primary, width=10)
-    d.line([(0, 0), (0, corner_size)], fill=primary, width=10)
-    d.line([(w-corner_size, h), (w, h)], fill=secondary, width=10)
-    d.line([(w, h-corner_size), (w, h)], fill=secondary, width=10)
+        cta_text = c.get('cta_text', 'WWW.CODEES-CM.COM').upper()
+        font_cta = get_font(c['default_font'], int(h * 0.025), bold=True)
+        tw = font_cta.getlength(cta_text)
+        d.text((w/2 - tw/2, h - 80), cta_text, font=font_cta, fill=secondary)
 
 def render_abstract_business(ctx):
     """Abstract Business: Bold diagonal + photo + dark panel + feature row."""
@@ -846,9 +869,36 @@ def generate_flyer(params):
         'logo': 'codees_hero'
     }
     
+    # Smart Defaults for specific templates (All have white backgrounds)
+    template_defaults = {
+        'template_1': { # Marketing Agency
+            'primary_color': '#0076BC', 
+            'secondary_color': '#1A1A1A',
+            'bg_color': '#FFFFFF'
+        },
+        'template_2': { # Social Post / Quote
+            'primary_color': '#0076BC', 
+            'secondary_color': '#1A1A1A',
+            'bg_color': '#FFFFFF',
+            'flyer_width': 1080,
+            'flyer_height': 1080
+        },
+        'template_3': { # Zenith Modern / Stats
+            'primary_color': '#0076BC', 
+            'accent_color': '#ED1C24',
+            'bg_color': '#FFFFFF'
+        },
+        'template_4': { # Codees Minimal / Person
+            'primary_color': '#0076BC', 
+            'accent_color': '#ED1C24',
+            'bg_color': '#FFFFFF'
+        }
+    }
+    
     # If template is specified, map it to template_id
     if 'template' in params:
-        template_name = str(params['template']).strip().lower().replace(" ", "_")
+        raw_name = str(params['template']).strip().lower()
+        template_name = raw_name.replace(" ", "_")
         
         # Check for direct match or variations
         target_key = None
@@ -856,21 +906,25 @@ def generate_flyer(params):
             target_key = template_name
         elif f"template_{template_name}" in template_mapping:
             target_key = f"template_{template_name}"
+        elif template_name in ['1', '2', '3', '4']:
+            target_key = f"template_{template_name}"
             
         if target_key:
             config['template_id'] = template_mapping[target_key]
-            print(f"DEBUG: Template '{params['template']}' normalized to '{template_name}' and mapped to template_id '{config['template_id']}'")
+            
+            # Apply Template Defaults if user hasn't overridden them
+            if target_key in template_defaults:
+                for k, v in template_defaults[target_key].items():
+                    if k not in params: # Only apply if not sent by user
+                        config[k] = v
             
             # Resolve template image path if not already provided as background
             if not config.get('bg_image_path'):
                 template_img_path = os.path.join(os.path.dirname(__file__), 'template', f"{target_key}.png")
                 if os.path.exists(template_img_path):
                     config['bg_image_path'] = template_img_path
-                    print(f"DEBUG: Using template image: {template_img_path}")
         else:
-            print(f"DEBUG: Template '{params['template']}' (normalized: '{template_name}') not found in mapping")
-    else:
-        print("DEBUG: No template parameter found")
+            print(f"DEBUG: Template '{params['template']}' not found in mapping")
     
     if isinstance(config.get('features'), str):
         try: config['features'] = json.loads(config['features'])
