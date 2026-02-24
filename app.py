@@ -45,12 +45,15 @@ def list_templates():
 def generate_flyer_endpoint():
     temp_files = []
     try:
-        # Get data from JSON (force=True handles cases where Content-Type might be missing) or Form
-        data = {}
+        # Get data from JSON
         try:
-            data = request.get_json(force=True) or {}
-        except:
-            data = {}
+            # force=True handles cases where Content-Type might be missing
+            data = request.get_json(force=True) if request.data else {}
+        except Exception as e:
+            return jsonify({
+                "error": "Malformed JSON payload. Please ensure you have no raw newlines in strings.",
+                "details": str(e)
+            }), 400
             
         form = request.form
         
