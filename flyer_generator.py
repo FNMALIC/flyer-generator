@@ -233,7 +233,7 @@ def render_modern_corporate(ctx):
     d.text((w - padding - 300, h - padding - 40), c.get('cta_text', 'WWW.CORE.COM'), font=font_footer, fill=primary)
 
 def render_marketing_agency(ctx):
-    """Bold Minimalist: High-contrast, Swiss-inspired design."""
+    """Premium Agency: High-contrast, bold typography with glassmorphism elements."""
     f = ctx['flyer']
     d = ctx['draw']
     w = ctx['width']
@@ -242,39 +242,71 @@ def render_marketing_agency(ctx):
     
     primary = hex_to_rgb(c.get('primary_color', '#FFC107'))
     secondary = hex_to_rgb(c.get('secondary_color', '#1A1A1A'))
-    padding = int(w * 0.1)
+    padding = int(w * 0.08)
+    is_landscape = w > h
 
-    # 1. Background (Bold split)
+    # 1. Background (Premium dark gradient feel)
     if not c.get('bg_image_path'):
-        d.rectangle([0, 0, w, h], fill=secondary)
+        # Draw a subtle gradient background manually if no template image
+        for i in range(h):
+            color = tuple(int(secondary[j] * (0.8 + 0.2 * i / h)) for j in range(3))
+            d.line([(0, i), (w, i)], fill=color)
     
-    # 2. Large Typography (Hero)
-    curr_y = padding * 1.5
-    font_h = get_font(c['default_font'], 120, bold=True)
-    curr_y = draw_wrapped_text(d, c.get('headline', 'BE BOLD.').upper(), font_h, "#FFFFFF", w - 2*padding, padding, curr_y, alignment="left", line_height=1.0)
-    
-    # 3. Main Image (Square & Minimal)
+    # 2. Main Hero Image
     if 'image_path' in c and os.path.exists(c['image_path']):
-        img_size = int(w * 0.6)
+        if is_landscape:
+            img_w, img_h = int(w * 0.45), h
+            ix, iy = w - img_w, 0
+        else:
+            img_w, img_h = w, int(h * 0.5)
+            ix, iy = 0, 0
+            
         img = Image.open(c['image_path'])
-        img = resize_to_fill(img, img_size, img_size)
-        f.paste(img, (int(w - img_size - padding), int(curr_y + 40)))
+        img = resize_to_fill(img, img_w, img_h)
+        f.paste(img, (ix, iy))
+        
+        # Add a subtle overlay to the image part
+        if not is_landscape:
+            overlay = Image.new('RGBA', (img_w, img_h), (0, 0, 0, 40))
+            f.paste(overlay, (ix, iy), overlay)
 
-    # 4. Secondary Content
-    curr_y += 100
-    font_tag = get_font(c['default_font'], 40, bold=True)
-    curr_y = draw_wrapped_text(d, c.get('tagline', 'CREATIVE SOLUTIONS').upper(), font_tag, primary, w*0.4, padding, curr_y, alignment="left")
+    # 3. Content Area (Glassmorphism if it's over an image)
+    content_w = int(w * 0.5) if is_landscape else w
+    content_h = h if is_landscape else int(h * 0.6)
+    cx, cy = 0, 0 if is_landscape else int(h * 0.4)
     
-    # Elegant body text
-    curr_y += 40
-    font_body = get_font(c['default_font'], 22)
-    draw_wrapped_text(d, c.get('body_text', 'Breaking boundaries through minimalist execution and strategic design.'), font_body, "#BBBBBB", w*0.35, padding, curr_y, alignment="left")
+    if is_landscape:
+        draw_glass_rect(f, (0, 0, content_w + 40, h), fill=(*secondary, 220), blur_radius=10)
+    else:
+        draw_glass_rect(f, (0, cy, w, h), fill=(*secondary, 200), blur_radius=15)
 
-    # 5. Accent geometries
-    d.rectangle([padding, h - padding - 60, padding + 100, h - padding - 55], fill=primary)
+    # 4. Typography
+    draw_y = cy + padding
     
-    font_cta = get_font(c['default_font'], 28, bold=True)
-    d.text((padding, h - padding - 40), c.get('cta_text', 'WWW.AGENCY.COM'), font=font_cta, fill="#FFFFFF")
+    # Headline
+    font_h_size = int(h * 0.12) if not is_landscape else int(h * 0.15)
+    font_h = get_font(c['default_font'], font_h_size, bold=True)
+    headline = c.get('headline', 'BE BOLD.').upper()
+    draw_y = draw_wrapped_text(d, headline, font_h, "#FFFFFF", content_w - 2*padding, padding, draw_y, alignment="left", line_height=0.95)
+    
+    # Tagline/Body
+    draw_y += 20
+    font_tag = get_font(c['default_font'], int(h * 0.04), bold=True)
+    draw_y = draw_wrapped_text(d, c.get('tagline', 'CREATIVE SOLUTIONS').upper(), font_tag, primary, content_w - 2*padding, padding, draw_y, alignment="left")
+    
+    draw_y += 30
+    font_body = get_font(c['default_font'], int(h * 0.03))
+    body_text = c.get('body_text', 'Breaking boundaries through minimalist execution and strategic design.')
+    draw_wrapped_text(d, body_text, font_body, "#DDDDDD", content_w - 2.5*padding, padding, draw_y, alignment="left", line_height=1.3)
+
+    # 5. Branding Footer
+    footer_y = h - padding
+    font_cta = get_font(c['default_font'], int(h * 0.035), bold=True)
+    cta_text = c.get('cta_text', 'WWW.CODEES-CM.COM').upper()
+    d.text((padding, footer_y), cta_text, font=font_cta, fill=primary)
+    
+    # Accent bar
+    d.rectangle([padding, footer_y - 15, padding + 80, footer_y - 10], fill=primary)
 
 def render_zenith_modern(ctx):
     """Zenith: High-end minimalist design with glassmorphism and full-bleed image."""
@@ -356,7 +388,7 @@ def render_zenith_modern(ctx):
     d.text((inner_x, sep_y + 14), cta, font=font_cta, fill='#FFFFFF')
 
 def render_codees_minimal(ctx):
-    """Codees Clean: Minimalist white design with centered logo and accent bars."""
+    """Codees Clean v2: Sophisticated minimalist design with refined typography."""
     f = ctx['flyer']
     d = ctx['draw']
     w = ctx['width']
@@ -365,6 +397,7 @@ def render_codees_minimal(ctx):
     
     primary = hex_to_rgb(c.get('primary_color', '#0076BC')) # Blue
     accent = hex_to_rgb(c.get('accent_color', '#ED1C24'))   # Red
+    padding = int(w * 0.1)
     
     # 1. White Background
     if not c.get('bg_image_path'):
@@ -372,60 +405,50 @@ def render_codees_minimal(ctx):
     
     # 2. Logo (Centered at top)
     logo_path = c.get('logo_path', 'logo/image.png')
-    draw_logo(f, logo_path, (w/2, 80), size=(300, 150))
+    draw_logo(f, logo_path, (w/2, 60), size=(250, 120))
     
-    # 3. Main Content
-    curr_y = 350
+    # 3. Content Block
+    curr_y = 280
     
-    # Company Name
-    if c.get('company_name'):
-        font_company = get_font(c['default_font'], int(c.get('company_font_size', 42)), bold=True)
-        company_color = c.get('company_font_color', '#0076BC')
-        curr_y = draw_wrapped_text(d, c['company_name'], font_company, company_color, w * 0.8, w/2, curr_y, alignment="center")
-        curr_y += 30
+    # Decorative Top Accent
+    d.rectangle([w/2 - 40, curr_y, w/2 + 40, curr_y + 4], fill=accent)
+    curr_y += 40
     
-    # Large Headline
-    font_h = get_font(c['default_font'], int(c.get('headline_font_size', 60)), bold=True)
-    headline_color = c.get('headline_font_color', '#000000')
-    curr_y = draw_wrapped_text(d, c.get('headline', 'The Hidden Crisis'), font_h, headline_color, w * 0.8, w/2, curr_y, alignment="center")
+    # Headline (Elegant & Balanced)
+    font_h_size = int(h * 0.08)
+    font_h = get_font(c['default_font'], font_h_size, bold=True)
+    headline_color = c.get('headline_font_color', '#1A1A1A')
+    curr_y = draw_wrapped_text(d, c.get('headline', 'BUILD THE FUTURE'), font_h, headline_color, w * 0.8, w/2, curr_y, alignment="center", line_height=1.0)
     
-    # Body Text
+    # Body Text (Clean spacing)
     if c.get('body_text'):
-        curr_y += 40
-        font_body = get_font(c['default_font'], int(c.get('body_font_size', 24)))
-        body_color = c.get('body_font_color', '#333333')
-        curr_y = draw_wrapped_text(d, c['body_text'], font_body, body_color, w * 0.7, w/2, curr_y, alignment="center")
+        curr_y += 30
+        font_body = get_font(c['default_font'], int(h * 0.025))
+        body_color = c.get('body_font_color', '#444444')
+        curr_y = draw_wrapped_text(d, c['body_text'], font_body, body_color, w * 0.7, w/2, curr_y, alignment="center", line_height=1.5)
     
-    # Contact Information
-    contact_y = h - 200
-    if c.get('contact_website') or c.get('contact_email') or c.get('contact_phone'):
-        font_contact = get_font(c['default_font'], int(c.get('contact_font_size', 20)))
-        contact_color = c.get('contact_font_color', '#666666')
-        
-        if c.get('contact_website'):
-            contact_y = draw_wrapped_text(d, c['contact_website'], font_contact, contact_color, w * 0.8, w/2, contact_y, alignment="center")
-            contact_y += 25
-        if c.get('contact_email'):
-            contact_y = draw_wrapped_text(d, c['contact_email'], font_contact, contact_color, w * 0.8, w/2, contact_y, alignment="center")
-            contact_y += 25
-        if c.get('contact_phone'):
-            contact_y = draw_wrapped_text(d, c['contact_phone'], font_contact, contact_color, w * 0.8, w/2, contact_y, alignment="center")
+    # 4. Refined Footer
+    footer_y = h - 180
+    draw_accent_line(d, (padding, footer_y), (w - padding, footer_y), "#EEEEEE", width=1)
     
-    # 4. Accent Bars (Bottom)
-    bar_h = 60
-    # Red bar (slanted end)
-    d.polygon([(0, h - bar_h - 80), (w * 0.65, h - bar_h - 80), (w * 0.6, h - 80), (0, h - 80)], fill=accent)
-    # Blue bar (footer)
+    # Contact Details
+    contact_y = footer_y + 30
+    font_contact = get_font(c['default_font'], int(h * 0.02))
+    contact_color = c.get('contact_font_color', '#666666')
+    
+    contact_parts = []
+    if c.get('contact_website'): contact_parts.append(c['contact_website'])
+    if c.get('contact_email'): contact_parts.append(c['contact_email'])
+    if c.get('contact_phone'): contact_parts.append(c['contact_phone'])
+    
+    if contact_parts:
+        contact_text = "  |  ".join(contact_parts)
+        draw_wrapped_text(d, contact_text, font_contact, contact_color, w * 0.9, w/2, contact_y, alignment="center")
+
+    # 5. Subtle Branding Accent
+    bar_h = 10
     d.rectangle([0, h - bar_h, w, h], fill=primary)
-    
-    # 5. Footer Details
-    font_f = get_font(c['default_font'], 24, bold=True)
-    # Social handles (left)
-    d.text((100, h - bar_h + 15), "f  i  in  @codees", font=font_f, fill="#FFFFFF")
-    # URL (right)
-    url_t = c.get('cta_text', 'www.codees-cm.com').lower()
-    url_w = font_f.getlength(url_t)
-    d.text((w - 100 - url_w, h - bar_h + 15), url_t, font=font_f, fill="#FFFFFF")
+    d.rectangle([0, h - bar_h - 5, w * 0.3, h - bar_h], fill=accent)
 
 def render_codees_hero(ctx):
     """Codees Hero v2: Full-bleed image, gradient anchor, clean hierarchy."""
@@ -905,8 +928,8 @@ def generate_flyer(params):
         # pick updated flyer from ctx after social template resizes it
         flyer = ctx['flyer']
     else:
-        print(f"DEBUG: No matching template_id '{tid}', calling render_modern_corporate")
-        render_modern_corporate(ctx)
+        print(f"DEBUG: No matching template_id '{tid}', calling render_zenith_modern (fallback)")
+        render_zenith_modern(ctx)
 
     img_byte_arr = io.BytesIO()
     flyer.save(img_byte_arr, format='PNG', optimize=True)

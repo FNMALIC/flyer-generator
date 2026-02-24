@@ -45,9 +45,17 @@ def list_templates():
 def generate_flyer_endpoint():
     temp_files = []
     try:
-        # Get data from JSON or Form
-        data = request.get_json() or {}
+        # Get data from JSON (force=True handles cases where Content-Type might be missing) or Form
+        data = {}
+        try:
+            data = request.get_json(force=True) or {}
+        except:
+            data = {}
+            
         form = request.form
+        
+        # Log received data for debugging (concise)
+        app.logger.info(f"Received params - JSON: {list(data.keys())}, Form: {list(form.keys())}")
         
         # Handle main image upload separately
         img_path = None
@@ -80,9 +88,6 @@ def generate_flyer_endpoint():
                 bg_image.save(bg_image_path)
                 temp_files.append(bg_image_path)
 
-        if not img_path and not template_name and not bg_image_path:
-            return jsonify({"error": "No template, image, or background image found"}), 400
-
         # Extract parameters
         params = {}
         if img_path:
@@ -92,25 +97,16 @@ def generate_flyer_endpoint():
         if template_name:
             params['template'] = template_name
 
-        # Combined parameter list
-        all_params = [
-            'layout_type', 'image_position', 'image_ratio', 'flyer_width', 'flyer_height',
-            'bg_type', 'bg_color', 'gradient_start', 'gradient_end',
-            'overlay_enabled', 'overlay_color', 'overlay_opacity',
-            'padding', 'section_spacing', 'text_alignment', 'line_height',
-            'company_name', 'company_font', 'company_font_size', 'company_font_color',
-            'headline', 'headline_font', 'headline_font_size', 'headline_font_color',
-            'body_text', 'body_font', 'body_font_size', 'body_font_color',
-            'contact_phone', 'contact_email', 'contact_address', 'contact_website',
-            'contact_font', 'contact_font_size', 'contact_font_color',
-            'show_cta', 'cta_bg_color', 'cta_text_color'
-        ]
-        
-        for key in all_params:
+        # Combined parameter list - ensuring we capture EVERYTHING
+        all_possible_keys = set(list(data.keys()) + list(form.keys()))
+        for key in all_possible_keys:
             if key in data:
                 params[key] = data[key]
             elif key in form:
                 params[key] = form[key]
+
+        if not params.get('image_path') and not params.get('template') and not params.get('bg_image_path'):
+             return jsonify({"error": "No template, image, or background image specified"}), 400
 
         # Generate flyer
         try:
