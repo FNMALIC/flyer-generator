@@ -309,83 +309,80 @@ def render_marketing_agency(ctx):
     d.rectangle([padding, footer_y - 15, padding + 80, footer_y - 10], fill=primary)
 
 def render_zenith_modern(ctx):
-    """Zenith: High-end minimalist design with glassmorphism and full-bleed image."""
+    """Zenith v2: Responsive high-end glassmorphism design."""
     f = ctx['flyer']
     d = ctx['draw']
     w = ctx['width']
     h = ctx['height']
     c = ctx['config']
 
-    primary   = hex_to_rgb(c.get('primary_color', '#0076BC'))
-    accent    = hex_to_rgb(c.get('accent_color',  '#ED1C24'))
+    primary = hex_to_rgb(c.get('primary_color', '#0076BC'))
+    accent = hex_to_rgb(c.get('accent_color', '#ED1C24'))
+    is_landscape = w > h
 
-    # 1. Full-bleed Background Image with dark vignette
-    img_path = c.get('image_path', '')
-    if img_path and os.path.exists(img_path) and not c.get('bg_image_path'):
-        img = Image.open(img_path)
-        img = resize_to_fill(img, w, h)
-        overlay = Image.new('RGBA', (w, h), (0, 0, 0, 120))
-        img = Image.alpha_composite(img.convert('RGBA'), overlay)
-        f.paste(img, (0, 0))
-    elif not c.get('bg_image_path'):
+    # 1. Background
+    if not c.get('bg_image_path'):
         d.rectangle([0, 0, w, h], fill='#0D1B2A')
+    
+    # 2. Main Hero Image (if provided)
+    img_path = c.get('image_path', '')
+    if img_path and os.path.exists(img_path):
+        img_w, img_h = (int(w * 0.5), h) if is_landscape else (w, int(h * 0.45))
+        ix, iy = (w - img_w, 0) if is_landscape else (0, 0)
+        img = Image.open(img_path)
+        img = resize_to_fill(img, img_w, img_h)
+        f.paste(img, (ix, iy))
+        
+        # Vignette overlay for image
+        overlay = Image.new('RGBA', (img_w, img_h), (13, 27, 42, 60))
+        f.paste(overlay, (ix, iy), overlay)
 
-    # 2. Glassmorphism card – centered on canvas with generous padding
-    padding   = int(w * 0.06)
-    card_w    = int(w * 0.84)
-    card_h    = int(h * 0.72)
-    card_x    = (w - card_w) // 2      # horizontally centered
-    card_y    = (h - card_h) // 2
+    # 3. Glassmorphism Content Card
+    if is_landscape:
+        card_w, card_h = int(w * 0.6), int(h * 0.8)
+        card_x, card_y = int(w * 0.05), int(h * 0.1)
+    else:
+        card_w, card_h = int(w * 0.9), int(h * 0.65)
+        card_x, card_y = int(w * 0.05), int(h * 0.3)
 
     draw_glass_rect(f, (card_x, card_y, card_x + card_w, card_y + card_h),
-                    fill=(255, 255, 255, 38), blur_radius=25)
+                    fill=(255, 255, 255, 25), blur_radius=20)
 
-    # 3. Logo inside card – top-left of card
+    # 4. Content inside card
+    inner_padding = 60
+    curr_x = card_x + inner_padding
+    curr_y = card_y + 40
+    
+    # Logo
     logo_path = c.get('logo_path', 'logo/image.png')
-    draw_logo(f, logo_path, (card_x + 50, card_y + 40), size=(220, 100))
+    draw_logo(f, logo_path, (curr_x, curr_y), size=(200, 80))
+    curr_y += 110
 
-    # 4. Thin vertical accent bar
-    inner_x   = card_x + 50
-    bar_top   = card_y + 155
-    d.rectangle([inner_x, bar_top, inner_x + 4, bar_top + int(card_h * 0.38)], fill=primary)
+    # Headline
+    font_h_size = int(card_h * 0.15) if is_landscape else int(card_h * 0.12)
+    font_h = get_font(c['default_font'], font_h_size, bold=True)
+    headline = c.get('headline', 'ELEVATING STANDARDS').upper()
+    curr_y = draw_wrapped_text(d, headline, font_h, "#FFFFFF", card_w - 2*inner_padding, curr_x, curr_y, alignment="left", line_height=0.95)
+    
+    # Body or Features
+    curr_y += 20
+    d.rectangle([curr_x, curr_y, curr_x + 60, curr_y + 4], fill=accent)
+    curr_y += 20
+    
+    if c.get('body_text'):
+        font_body = get_font(c['default_font'], int(card_h * 0.05))
+        draw_wrapped_text(d, c['body_text'], font_body, "#EEEEEE", card_w - 2.5*inner_padding, curr_x, curr_y, alignment="left", line_height=1.4)
+    elif c.get('features'):
+        font_feat = get_font(c['default_font'], int(card_h * 0.045), bold=True)
+        for feat in c['features'][:2]:
+            curr_y = draw_wrapped_text(d, f"• {feat['title']}", font_feat, primary, card_w - 2*inner_padding, curr_x, curr_y, alignment="left")
+            curr_y += 5
 
-    # 5. Headline
-    font_h    = get_font(c['default_font'], 62, bold=True)
-    text_x    = inner_x + 24
-    text_w    = card_w - 90
-    cy = draw_wrapped_text(d, c.get('headline', 'LEVEL UP TODAY').upper(),
-                           font_h, '#FFFFFF', text_w,
-                           text_x + text_w / 2, bar_top,
-                           alignment='left', line_height=1.08)
-
-    # 6. Tagline
-    font_tag  = get_font(c['default_font'], 26)
-    cy += 20
-    draw_wrapped_text(d, c.get('tagline', 'Expert-led workshops. Every week.'),
-                      font_tag, (*accent, 255), text_w,
-                      text_x + text_w / 2, cy,
-                      alignment='left', line_height=1.3)
-
-    # 7. Feature bullets (use Codees-relevant defaults)
-    default_features = [
-        {'title': 'LIVE Q&A WITH EXPERTS'},
-        {'title': 'HANDS-ON PROJECTS'},
-        {'title': 'COMMUNITY SUPPORT'},
-    ]
-    features = c.get('features') or default_features
-    dot_y = card_y + int(card_h * 0.67)
-    for item in features[:3]:
-        d.ellipse([inner_x, dot_y + 8, inner_x + 10, dot_y + 18], fill=primary)
-        font_f = get_font(c['default_font'], 20, bold=True)
-        d.text((inner_x + 22, dot_y), item.get('title', '').upper(), font=font_f, fill='#FFFFFF')
-        dot_y += 44
-
-    # 8. Bottom separator + CTA
-    sep_y = card_y + card_h - 90
-    draw_accent_line(d, (inner_x, sep_y), (card_x + card_w - 50, sep_y), '#FFFFFF', opacity=80)
-    font_cta = get_font(c['default_font'], 22, bold=True)
-    cta = c.get('cta_text', 'www.codees-cm.com').lower()
-    d.text((inner_x, sep_y + 14), cta, font=font_cta, fill='#FFFFFF')
+    # Footer/CTA inside card
+    footer_y = card_y + card_h - 60
+    font_cta = get_font(c['default_font'], int(card_h * 0.05), bold=True)
+    cta_text = c.get('cta_text', 'WWW.CODEES-CM.COM').upper()
+    d.text((curr_x, footer_y), cta_text, font=font_cta, fill=primary)
 
 def render_codees_minimal(ctx):
     """Codees Clean v2: Sophisticated minimalist design with refined typography."""
