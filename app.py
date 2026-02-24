@@ -47,13 +47,24 @@ def generate_flyer_endpoint():
     try:
         # Get data from JSON
         try:
-            # force=True handles cases where Content-Type might be missing
+            # First, try standard parsing
             data = request.get_json(force=True) if request.data else {}
-        except Exception as e:
-            return jsonify({
-                "error": "Malformed JSON payload. Please ensure you have no raw newlines in strings.",
-                "details": str(e)
-            }), 400
+        except Exception:
+            # If standard parsing fails, attempt to repair raw newlines (common in n8n)
+            try:
+                import json
+                raw_data = request.data.decode('utf-8', errors='ignore')
+                # A simple but effective repair: replace literal newlines with escaped \n
+                # Note: This is safe for simple flyer-gen payloads
+                repaired_data = raw_data.replace('\n', '\\n').replace('\r', '')
+                # Re-parse the "repaired" string
+                data = json.loads(repaired_data)
+                app.logger.info("Successfully repaired malformed JSON (raw newlines detected)")
+            except Exception as e:
+                return jsonify({
+                    "error": "Malformed JSON payload. Could not automatically repair the request.",
+                    "details": str(e)
+                }), 400
             
         form = request.form
         

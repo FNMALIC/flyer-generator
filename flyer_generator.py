@@ -6,31 +6,59 @@ import json
 import math
 from config import DEFAULT_CONFIG
 
+# Global font cache to speed up dynamic scaling
+_FONT_CACHE = {}
+
 def get_font(font_name_or_path, size, bold=False):
-    """Try to load a font, fallback to default if not found."""
+    """Try to load a font, with caching for performance."""
+    cache_key = (str(font_name_or_path), size, bold)
+    if cache_key in _FONT_CACHE:
+        return _FONT_CACHE[cache_key]
+        
     try:
         # Check if it's a direct path
         if os.path.exists(str(font_name_or_path)):
-            return ImageFont.truetype(str(font_name_or_path), size)
-        
-        # Try common paths for DejaVuSans
-        font_paths = []
-        if bold:
-             font_paths.append("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
-        font_paths.extend([
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "DejaVuSans.ttf"
-        ])
-        
-        for path in font_paths:
-            try:
-                return ImageFont.truetype(path, size)
-            except:
-                continue
-        
-        return ImageFont.load_default()
+            font = ImageFont.truetype(str(font_name_or_path), size)
+        else:
+            # Try common paths for DejaVuSans
+            font_paths = []
+            if bold:
+                 font_paths.append("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
+            font_paths.extend([
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                "DejaVuSans.ttf"
+            ])
+            
+            font = ImageFont.load_default()
+            for path in font_paths:
+                try:
+                    font = ImageFont.truetype(path, size)
+                    break
+                except:
+                    continue
+                    
+        _FONT_CACHE[cache_key] = font
+        return font
     except Exception:
         return ImageFont.load_default()
+
+def calculate_optimal_font_size(draw, text, font_path, max_width, max_height, initial_size, bold=True, min_size=12):
+    """Iteratively find the best font size to fit a box."""
+    current_size = initial_size
+    while current_size >= min_size:
+        font = get_font(font_path, current_size, bold=bold)
+        # Simulate drawing to check height
+        # We use a dummy y_start and alignment since we only care about the delta_y
+        temp_draw = ImageDraw.Draw(Image.new('RGB', (1, 1))) # Lightweight dummy
+        # Actually, draw_wrapped_text returns the NEXT y_start
+        # So height = returned_y - 0
+        height = draw_wrapped_text(temp_draw, text, font, "#000", max_width, 0, 0)
+        
+        if height <= max_height:
+            return current_size
+        current_size -= 4 if current_size > 40 else 2
+        
+    return min_size
 
 def hex_to_rgb(hex_str):
     if not hex_str: return (0,0,0)
@@ -280,29 +308,42 @@ def render_marketing_agency(ctx):
     else:
         draw_glass_rect(f, (0, cy, w, h), fill=(*secondary, 220), blur_radius=20)
 
-    # 4. Typography (Premium spacing)
+    # 4. Typography (Dynamic Scaling)
     draw_y = cy + padding
+    content_w_inner = content_w - 2*padding
     
-    # Headline (Bold & anchored)
-    font_h_size = int(h * 0.15) if is_landscape else int(h * 0.1)
-    font_h = get_font(c['default_font'], font_h_size, bold=True)
+    # Calculate safe headline area height (up to 40% of content area)
+    max_h_headline = int(content_h * 0.45)
+    
+    # Dynamic Headline
+    font_h_init = int(h * 0.15) if is_landscape else int(h * 0.1)
+    h_size = calculate_optimal_font_size(d, c.get('headline', 'BE BOLD.'), c['default_font'], 
+                                       content_w_inner, max_h_headline, font_h_init)
+    font_h = get_font(c['default_font'], h_size, bold=True)
+    
     headline = c.get('headline', 'BE BOLD.').upper()
-    draw_y = draw_wrapped_text(d, headline, font_h, "#FFFFFF", content_w - 2*padding, padding, draw_y, alignment="left", line_height=0.9)
+    draw_y = draw_wrapped_text(d, headline, font_h, "#FFFFFF", content_w_inner, padding, draw_y, alignment="left", line_height=0.85)
     
     # Accent Detail
-    curr_y = draw_y + 15
+    curr_y = draw_y + 12
     d.rectangle([padding, curr_y, padding + 60, curr_y + 4], fill=primary)
     draw_y = curr_y + 35
     
-    # Tagline/Body
-    if c.get('tagline'):
-        font_tag = get_font(c['default_font'], int(h * 0.04), bold=True)
-        draw_y = draw_wrapped_text(d, c['tagline'].upper(), font_tag, primary, content_w - 2*padding, padding, draw_y, alignment="left")
+    # Tagline/Body (Dynamic)
+    tagline = c.get('tagline', '').upper()
+    if tagline:
+        font_tag = get_font(c['default_font'], int(h * 0.035), bold=True)
+        draw_y = draw_wrapped_text(d, tagline, font_tag, primary, content_w_inner, padding, draw_y, alignment="left")
     
-    if c.get('body_text'):
-        draw_y += 20
-        font_body = get_font(c['default_font'], int(h * 0.028))
-        draw_wrapped_text(d, c['body_text'], font_body, "#DDDDDD", content_w - 2*padding, padding, draw_y, alignment="left", line_height=1.4)
+    body_text = c.get('body_text', '')
+    if body_text:
+        draw_y += 15
+        # Calculate remaining height for body
+        max_h_body = h - padding - 60 - draw_y
+        body_size = calculate_optimal_font_size(d, body_text, c['default_font'], 
+                                              content_w_inner, max_h_body, int(h * 0.028), bold=False, min_size=18)
+        font_body = get_font(c['default_font'], body_size)
+        draw_wrapped_text(d, body_text, font_body, "#DDDDDD", content_w_inner, padding, draw_y, alignment="left", line_height=1.4)
 
     # 5. Branded Footer
     footer_y = h - padding - 20
@@ -370,7 +411,7 @@ def render_zenith_modern(ctx):
     draw_glass_rect(f, (card_x, card_y, card_x + card_w, card_y + card_h),
                     fill=card_fill, blur_radius=25)
 
-    # 4. Content inside card
+    # 4. Content inside card (Dynamic Typography)
     inner_padding = int(card_w * 0.1)
     curr_x = card_x + inner_padding
     curr_y = card_y + int(card_h * 0.08)
@@ -379,22 +420,28 @@ def render_zenith_modern(ctx):
     # Logo (Refined sizing)
     logo_path = c.get('logo_path', 'logo/image.png')
     draw_logo(f, logo_path, (curr_x + 90, curr_y), size=(180, 70))
-    curr_y += int(card_h * 0.15)
+    curr_y += int(card_h * 0.12)
 
-    # Headline (Bold & Clear)
-    font_h_size = int(card_h * 0.16) if is_landscape else int(card_h * 0.12)
-    font_h = get_font(c['default_font'], font_h_size, bold=True)
+    # Dynamic Headline
+    max_h_h = int(card_h * 0.4)
+    h_init = int(card_h * 0.16) if is_landscape else int(card_h * 0.12)
     headline = c.get('headline', 'ELEVATING STANDARDS').upper()
-    curr_y = draw_wrapped_text(d, headline, font_h, text_color, card_w - 2*inner_padding, curr_x, curr_y, alignment="left", line_height=0.9)
+    h_size = calculate_optimal_font_size(d, headline, c['default_font'], 
+                                       card_w - 2*inner_padding, max_h_h, h_init)
+    font_h = get_font(c['default_font'], h_size, bold=True)
+    curr_y = draw_wrapped_text(d, headline, font_h, text_color, card_w - 2*inner_padding, curr_x, curr_y, alignment="left", line_height=0.85)
     
-    # Accent Line (Premium Gradient look)
-    curr_y += 20
+    # Accent Line
+    curr_y += 15
     d.rectangle([curr_x, curr_y, curr_x + 80, curr_y + 4], fill=accent)
-    curr_y += 30
+    curr_y += 25
     
-    # Body Text
+    # Dynamic Body
     if c.get('body_text'):
-        font_body = get_font(c['default_font'], int(card_h * 0.045))
+        max_h_b = card_y + card_h - int(card_h * 0.15) - curr_y
+        b_size = calculate_optimal_font_size(d, c['body_text'], c['default_font'], 
+                                           card_w - 2*inner_padding, max_h_b, int(card_h * 0.045), bold=False, min_size=16)
+        font_body = get_font(c['default_font'], b_size)
         draw_wrapped_text(d, c['body_text'], font_body, "#DDDDDD", card_w - 2*inner_padding, curr_x, curr_y, alignment="left", line_height=1.4)
 
     # 5. Branded Footer Details
@@ -444,24 +491,24 @@ def render_codees_minimal(ctx):
     logo_pos = (padding + 100, 80) if is_template_4 else (w/2, 80)
     draw_logo(f, logo_path, logo_pos, size=(200, 80))
     
-    # 4. Content Block
+    # 4. Content Block (Dynamic Typography)
     curr_y = 280
     
-    # Decorative Top Accent (Thin & Modern)
-    accent_x = padding if is_template_4 else (w/2 - 40)
-    d.rectangle([accent_x, curr_y, accent_x + 80, curr_y + 3], fill=accent)
-    curr_y += 40
-    
-    # Headline (Refined weight and line height)
-    font_h_size = int(h * 0.08)
-    font_h = get_font(c['default_font'], font_h_size, bold=True)
+    # Dynamic Headline
+    max_h_h = int(h * 0.3)
+    h_init = int(h * 0.08)
+    headline = c.get('headline', 'BUILD THE FUTURE').upper()
+    h_size = calculate_optimal_font_size(d, headline, c['default_font'], content_w, max_h_h, h_init)
+    font_h = get_font(c['default_font'], h_size, bold=True)
     headline_color = c.get('headline_font_color', '#1A1A1A')
-    curr_y = draw_wrapped_text(d, c.get('headline', 'BUILD THE FUTURE'), font_h, headline_color, content_w, text_x, curr_y, alignment=alignment, line_height=1.0)
+    curr_y = draw_wrapped_text(d, headline, font_h, headline_color, content_w, text_x, curr_y, alignment=alignment, line_height=0.95)
     
-    # Body Text (Better legibility)
+    # Body Text (Dynamic)
     if c.get('body_text'):
-        curr_y += 30
-        font_body = get_font(c['default_font'], int(h * 0.028))
+        curr_y += 25
+        max_h_b = footer_y - 20 - curr_y
+        b_size = calculate_optimal_font_size(d, c['body_text'], c['default_font'], content_w, max_h_b, int(h * 0.028), min_size=20)
+        font_body = get_font(c['default_font'], b_size)
         body_color = c.get('body_font_color', '#444444')
         curr_y = draw_wrapped_text(d, c['body_text'], font_body, body_color, content_w, text_x, curr_y, alignment=alignment, line_height=1.4)
     
@@ -597,17 +644,22 @@ def render_social_post(ctx):
         text_w = w - 2*padding
         text_x = w / 2
 
-    # Headline/Quote (Refinement: Slightly larger and centered)
-    font_h_size = int(h * 0.08) if is_template_2 else int(h * 0.065)
-    font_h = get_font(c['default_font'], font_h_size, bold=True)
+    # Headline/Quote (Dynamic Scaling)
+    max_h_h = int(h * 0.4)
+    h_init = int(h * 0.08) if is_template_2 else int(h * 0.065)
     headline = c.get('headline', 'BE INSPIRED').upper()
-    curr_y = draw_wrapped_text(d, headline, font_h, secondary, text_w, text_x, curr_y, alignment="center", line_height=1.0)
+    h_size = calculate_optimal_font_size(d, headline, c['default_font'], text_w, max_h_h, h_init)
+    font_h = get_font(c['default_font'], h_size, bold=True)
+    curr_y = draw_wrapped_text(d, headline, font_h, secondary, text_w, text_x, curr_y, alignment="center", line_height=0.95)
     
-    # Tagline/Body
+    # Tagline/Body (Dynamic)
     if c.get('body_text') or c.get('tagline'):
-        curr_y += 35
+        curr_y += 30
         body_text = c.get('body_text', c.get('tagline', ''))
-        font_body = get_font(c['default_font'], int(h * 0.032))
+        # Limit body to avoid footer overlap
+        max_h_b = (footer_y - 40 - curr_y) if not is_template_2 else (h - 60 - curr_y)
+        b_size = calculate_optimal_font_size(d, body_text, c['default_font'], text_w, max_h_b, int(h * 0.032), min_size=18)
+        font_body = get_font(c['default_font'], b_size)
         curr_y = draw_wrapped_text(d, body_text, font_body, primary, text_w, text_x, curr_y, alignment="center", line_height=1.4)
 
     # 3. Dynamic Branded Footer
