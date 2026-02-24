@@ -189,7 +189,8 @@ def render_modern_corporate(ctx):
     padding = int(w * 0.08)
 
     # 1. Background
-    d.rectangle([0, 0, w, h], fill="#FFFFFF")
+    if not c.get('bg_image_path'):
+        d.rectangle([0, 0, w, h], fill="#FFFFFF")
     
     # 2. Main Image (Elegant mask)
     if 'image_path' in c and os.path.exists(c['image_path']):
@@ -244,7 +245,8 @@ def render_marketing_agency(ctx):
     padding = int(w * 0.1)
 
     # 1. Background (Bold split)
-    d.rectangle([0, 0, w, h], fill=secondary)
+    if not c.get('bg_image_path'):
+        d.rectangle([0, 0, w, h], fill=secondary)
     
     # 2. Large Typography (Hero)
     curr_y = padding * 1.5
@@ -293,7 +295,7 @@ def render_zenith_modern(ctx):
         overlay = Image.new('RGBA', (w, h), (0, 0, 0, 120))
         img = Image.alpha_composite(img.convert('RGBA'), overlay)
         f.paste(img, (0, 0))
-    else:
+    elif not c.get('bg_image_path'):
         d.rectangle([0, 0, w, h], fill='#0D1B2A')
 
     # 2. Glassmorphism card – centered on canvas with generous padding
@@ -365,7 +367,8 @@ def render_codees_minimal(ctx):
     accent = hex_to_rgb(c.get('accent_color', '#ED1C24'))   # Red
     
     # 1. White Background
-    d.rectangle([0, 0, w, h], fill="#FFFFFF")
+    if not c.get('bg_image_path'):
+        d.rectangle([0, 0, w, h], fill="#FFFFFF")
     
     # 2. Logo (Centered at top)
     logo_path = c.get('logo_path', 'logo/image.png')
@@ -442,7 +445,7 @@ def render_codees_hero(ctx):
         img = Image.open(img_path)
         img = resize_to_fill(img, w, h)
         f.paste(img, (0, 0))
-    else:
+    elif not c.get('bg_image_path'):
         d.rectangle([0, 0, w, h], fill='#1A1A2E')
 
     # 2. Gradient overlay – dark from bottom, fades up (ensures legibility)
@@ -500,7 +503,8 @@ def render_social_post(ctx):
     padding = int(w * 0.08)
 
     # 1. Background split
-    d.rectangle([0, 0, w, h], fill="#FFFFFF")
+    if not c.get('bg_image_path'):
+        d.rectangle([0, 0, w, h], fill="#FFFFFF")
     if c.get('accents_enabled', True):
         draw_geometric_pattern(f, secondary, type="dots")
     
@@ -566,7 +570,8 @@ def render_abstract_business(ctx):
     dark     = (18, 18, 24)
 
     # ── 1. White base ──────────────────────────────────────────────────────────
-    d.rectangle([0, 0, w, h], fill='#FFFFFF')
+    if not c.get('bg_image_path'):
+        d.rectangle([0, 0, w, h], fill='#FFFFFF')
 
     # ── 2. Hero Photo (right side, clipped with diagonal) ──────────────────────
     photo_x = int(w * 0.30)   # photo starts here
@@ -715,7 +720,8 @@ def render_abstract_social(ctx):
     dark    = (18, 18, 24)
 
     # 1. White base
-    d.rectangle([0, 0, w, h], fill='#FFFFFF')
+    if not c.get('bg_image_path'):
+        d.rectangle([0, 0, w, h], fill='#FFFFFF')
 
     # 2. Hero photo (top 55%)
     photo_h = int(h * 0.55)
@@ -838,22 +844,27 @@ def generate_flyer(params):
     width = int(config['flyer_width'])
     height = int(config['flyer_height'])
     
-    flyer = Image.new('RGB', (width, height), config['bg_color'])
-    draw = ImageDraw.Draw(flyer)
-    
-    ctx = {'flyer': flyer, 'draw': draw, 'width': width, 'height': height, 'config': config}
-    
     tid = config.get('template_id')
     
     # Auto-adjust dimensions for social media if not provided
     if tid == 'social_post' and 'flyer_width' not in params:
         width = 1080
         height = 1080
-        ctx['width'] = 1080
-        ctx['height'] = 1080
+        
+    bg_path = config.get('bg_image_path')
+    if bg_path and os.path.exists(bg_path):
+        try:
+            bg_img = Image.open(bg_path).convert('RGB')
+            flyer = resize_to_fill(bg_img, width, height)
+        except Exception as e:
+            print(f"Error loading background image: {e}")
+            flyer = Image.new('RGB', (width, height), config['bg_color'])
+    else:
         flyer = Image.new('RGB', (width, height), config['bg_color'])
-        ctx['flyer'] = flyer
-        ctx['draw'] = ImageDraw.Draw(flyer)
+        
+    draw = ImageDraw.Draw(flyer)
+    
+    ctx = {'flyer': flyer, 'draw': draw, 'width': width, 'height': height, 'config': config}
 
     if tid == 'marketing_agency':
         print("DEBUG: Calling render_marketing_agency")
