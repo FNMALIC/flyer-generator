@@ -45,6 +45,10 @@ def list_templates():
 def generate_flyer_endpoint():
     temp_files = []
     try:
+        # Get data from JSON or Form
+        data = request.get_json() or {}
+        form = request.form
+        
         # Handle main image upload separately
         img_path = None
         if 'image' in request.files and request.files['image'].filename != '':
@@ -58,7 +62,7 @@ def generate_flyer_endpoint():
             main_image.save(img_path)
             temp_files.append(img_path)
         
-        template_name = request.form.get('template')
+        template_name = data.get('template') or form.get('template')
 
         # Use default image.png as fallback ONLY if no image and no template
         if not img_path and not template_name:
@@ -88,19 +92,12 @@ def generate_flyer_endpoint():
         if template_name:
             params['template'] = template_name
 
-        # Layout & General
-        basic_params = [
+        # Combined parameter list
+        all_params = [
             'layout_type', 'image_position', 'image_ratio', 'flyer_width', 'flyer_height',
             'bg_type', 'bg_color', 'gradient_start', 'gradient_end',
             'overlay_enabled', 'overlay_color', 'overlay_opacity',
-            'padding', 'section_spacing', 'text_alignment', 'line_height'
-        ]
-        for key in basic_params:
-            if key in request.form:
-                params[key] = request.form[key]
-
-        # Text Sections
-        text_keys = [
+            'padding', 'section_spacing', 'text_alignment', 'line_height',
             'company_name', 'company_font', 'company_font_size', 'company_font_color',
             'headline', 'headline_font', 'headline_font_size', 'headline_font_color',
             'body_text', 'body_font', 'body_font_size', 'body_font_color',
@@ -108,9 +105,12 @@ def generate_flyer_endpoint():
             'contact_font', 'contact_font_size', 'contact_font_color',
             'show_cta', 'cta_bg_color', 'cta_text_color'
         ]
-        for key in text_keys:
-            if key in request.form:
-                params[key] = request.form[key]
+        
+        for key in all_params:
+            if key in data:
+                params[key] = data[key]
+            elif key in form:
+                params[key] = form[key]
 
         # Generate flyer
         try:

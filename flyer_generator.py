@@ -828,19 +828,27 @@ def generate_flyer(params):
     
     # If template is specified, map it to template_id
     if 'template' in params:
-        template_name = params['template']
+        template_name = str(params['template']).strip().lower().replace(" ", "_")
+        
+        # Check for direct match or variations
+        target_key = None
         if template_name in template_mapping:
-            config['template_id'] = template_mapping[template_name]
-            print(f"DEBUG: Template '{template_name}' mapped to template_id '{config['template_id']}'")
+            target_key = template_name
+        elif f"template_{template_name}" in template_mapping:
+            target_key = f"template_{template_name}"
+            
+        if target_key:
+            config['template_id'] = template_mapping[target_key]
+            print(f"DEBUG: Template '{params['template']}' normalized to '{template_name}' and mapped to template_id '{config['template_id']}'")
             
             # Resolve template image path if not already provided as background
             if not config.get('bg_image_path'):
-                template_img_path = os.path.join(os.path.dirname(__file__), 'template', f"{template_name}.png")
+                template_img_path = os.path.join(os.path.dirname(__file__), 'template', f"{target_key}.png")
                 if os.path.exists(template_img_path):
                     config['bg_image_path'] = template_img_path
                     print(f"DEBUG: Using template image: {template_img_path}")
         else:
-            print(f"DEBUG: Template '{template_name}' not found in mapping")
+            print(f"DEBUG: Template '{params['template']}' (normalized: '{template_name}') not found in mapping")
     else:
         print("DEBUG: No template parameter found")
     
