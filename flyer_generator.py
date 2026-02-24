@@ -106,8 +106,12 @@ def draw_geometric_pattern(image, color, type="dots"):
     """Draw subtle geometric patterns in the background."""
     draw = ImageDraw.Draw(image, 'RGBA')
     w, h = image.size
-    rgb = hex_to_rgb(color) if isinstance(color, str) else color
-    fill = (*rgb, 40) # Very subtle
+    if isinstance(color, str):
+        fill = (*hex_to_rgb(color), 40)
+    elif len(color) == 3:
+        fill = (*color, 40)
+    else:
+        fill = color
     
     if type == "dots":
         step = 40
@@ -163,6 +167,127 @@ def draw_logo(image, logo_path, position, size=(150, 150)):
     except Exception as e:
         print(f"Error drawing logo: {e}")
 
+def draw_social_pills(draw, config, w, h, start_y, alignment="center", padding=None):
+    """
+    Draw a series of premium branded pills for social handles and contacts.
+    """
+    primary = hex_to_rgb(config.get('primary_color', '#0076BC'))
+    font_name = config.get('default_font', 'DejaVuSans')
+    
+    # Collect items
+    items = []
+    if config.get('contact_website'): items.append(('🔗', config['contact_website']))
+    if config.get('contact_email'):   items.append(('✉', config['contact_email']))
+    items.append(('in f', '@codees_cm'))
+    
+    font_icon = get_font(font_name, int(h * 0.018), bold=True)
+    font_label = get_font(font_name, int(h * 0.018))
+    
+    # Calculate geometries
+    total_w = 0
+    geoms = []
+    gap = 15
+    for icon, label in items:
+        iw = font_icon.getlength(icon)
+        lw = font_label.getlength(label)
+        pw = iw + lw + 50
+        geoms.append((pw, iw, lw))
+        total_w += pw + gap
+    total_w -= gap
+    
+    # Alignment
+    if padding is None: padding = int(w * 0.08)
+    
+    if alignment == "left":
+        curr_x = padding
+    elif alignment == "right":
+        curr_x = w - padding - total_w
+    else: # center
+        curr_x = (w - total_w) / 2
+        
+    for i, (icon, label) in enumerate(items):
+        pw, iw, lw = geoms[i]
+        ph = 42
+        
+        # Pill Background
+        draw.rounded_rectangle([curr_x, start_y, curr_x + pw, start_y + ph], radius=ph/2, fill=primary)
+        
+        # Icon & Label
+        draw.text((curr_x + 20, start_y + 8), icon, font=font_icon, fill="#FFFFFF")
+        draw.text((curr_x + 20 + iw + 10, start_y + 8), label, font=font_label, fill="#FFFFFF")
+        
+        curr_x += pw + gap
+    
+    return start_y + 50
+
+def draw_complex_footer(image, draw, config, w, h, footer_h=180):
+    """
+    Draw a sophisticated, multi-column footer inspired by professional marketing flyers.
+    """
+    primary = hex_to_rgb(config.get('primary_color', '#0076BC'))
+    accent = hex_to_rgb(config.get('accent_color', '#ED1C24'))
+    font_name = config.get('default_font', 'DejaVuSans')
+    
+    footer_y = h - footer_h
+    
+    # 1. Background Strip
+    draw.rectangle([0, footer_y, w, h], fill=primary)
+    
+    # 2. Diagonal Accent (Darker overlay on the right)
+    try:
+        r, g, b = primary
+        dark_primary = (max(0, r-30), max(0, g-30), max(0, b-30))
+        slant_x = w * 0.6
+        draw.polygon([(slant_x, footer_y), (w, footer_y), (w, h), (slant_x - 50, h)], fill=dark_primary)
+    except:
+        pass
+
+    pad_x = 40
+    pad_y = 35
+    
+    font_ic = get_font(font_name, 22, bold=True)
+    font_text = get_font(font_name, 20)
+    font_bold = get_font(font_name, 22, bold=True)
+    
+    # Left Section: Website & Address
+    curr_x = pad_x
+    curr_y = footer_y + pad_y
+    
+    # Website
+    draw.text((curr_x + 5, curr_y + 8), "🌐", font=font_ic, fill="#FFFFFF")
+    draw.text((curr_x + 50, curr_y + 8), config.get('contact_website', 'www.codees-cm.com'), font=font_text, fill="#FFFFFF")
+    
+    # Address
+    curr_y += 55
+    draw.text((curr_x + 5, curr_y + 8), "📍", font=font_ic, fill="#FFFFFF")
+    draw.text((curr_x + 50, curr_y + 8), config.get('contact_address', 'Yaoundé, Cameroon'), font=font_text, fill="#FFFFFF")
+
+    # Middle Section: Actual Logo (Transparent background)
+    logo_path = config.get('logo_path', 'logo/image.png')
+    if os.path.exists(logo_path):
+        qr_size = 120
+        qr_x = int((w - qr_size) / 2)
+        qr_y = int(footer_y + (footer_h - qr_size) / 2)
+        
+        try:
+            logo = Image.open(logo_path).convert("RGBA")
+            logo.thumbnail((qr_size, qr_size), Image.Resampling.LANCZOS)
+            image.paste(logo, (int(qr_x + (qr_size - logo.width)/2), int(qr_y + (qr_size - logo.height)/2)), logo)
+        except Exception as e:
+            print(f"Footer logo error: {e}")
+            draw.text((qr_x + 15, qr_y + 40), "CODEES", font=get_font(font_name, 18, bold=True), fill="#FFFFFF")
+
+    # Right Section: Call Us
+    curr_x = w * 0.65
+    curr_y = footer_y + (footer_h - 60) / 2 + 10
+    
+    draw.text((curr_x + 5, curr_y + 10), "📞", font=get_font(font_name, 35, bold=True), fill="#FFFFFF")
+    
+    draw.text((curr_x + 70, curr_y + 2), "CALL US FOR INFO:", font=get_font(font_name, 18, bold=True), fill="#FFFFFF")
+    draw.text((curr_x + 70, curr_y + 28), "620181113", font=font_bold, fill="#FFFFFF")
+
+    return footer_y
+
 def resize_to_fill(img, target_w, target_h):
     img_w, img_h = img.size
     ratio = max(target_w / img_w, target_h / img_h)
@@ -205,7 +330,7 @@ def draw_feature_item(draw, x, y, title, text, primary_color, secondary_color, w
     
     # Body
     font_b = get_font("DejaVuSans", 20)
-    draw_wrapped_text(draw, text, font_b, "#666666", width - icon_size - 40, x + icon_size + 20 + (width - icon_size - 40)/2, y + 35, alignment="left")
+    draw_wrapped_text(draw, text, font_b, "#666666", width - icon_size - 40, x + icon_size + 20, y + 35, alignment="left")
     
     return y + 150
 
@@ -262,8 +387,12 @@ def render_modern_corporate(ctx):
 
     # 5. Footer
     font_footer = get_font(c['default_font'], 24, bold=True)
-    d.text((padding, h - padding - 40), c.get('company_name', 'CORE').upper(), font=font_footer, fill=secondary)
-    d.text((w - padding - 300, h - padding - 40), c.get('cta_text', 'WWW.CORE.COM'), font=font_footer, fill=primary)
+    d.text((padding, h - padding - 20), c.get('company_name', 'CORE').upper(), font=font_footer, fill=secondary)
+    
+    draw_social_pills(d, c, w, h, h - padding - 65, alignment="center")
+    
+    cta_text = c.get('cta_text', 'www.codees-cm.com')
+    d.text((w - padding - font_footer.getlength(cta_text), h - padding - 20), cta_text, font=font_footer, fill=primary)
 
 def render_marketing_agency(ctx):
     """Premium Agency v2: High-contrast, bold typography with refined glassmorphism."""
@@ -278,17 +407,30 @@ def render_marketing_agency(ctx):
     padding = int(w * 0.08)
     is_landscape = w > h
 
+    # 0. State Detection
+    bg_path = c.get('bg_image_path', '')
+    is_template_bg = 'template' in bg_path or 'logo' in bg_path
+
     # 1. Background Enhancement (Gradient + Pattern)
-    if not c.get('bg_image_path'):
+    if not bg_path:
         for i in range(h):
             color = tuple(int(secondary[j] * (0.7 + 0.3 * i / h)) for j in range(3))
             d.line([(0, i), (w, i)], fill=color)
         draw_geometric_pattern(f, (*primary, 20), type="lines")
     
+    # Branded Header Box (To fill empty space at the top)
+    header_h = 140
+    d.rectangle([0, 0, w, header_h], fill="#FFFFFF")
+    d.rectangle([0, header_h - 10, w, header_h], fill=primary)
+    
+    # Logo in the Header
+    logo_path = c.get('logo_path', 'logo/image.png')
+    draw_logo(f, logo_path, (w/2, header_h/2 - 5), size=(200, 80))
+    
     # 2. Hero Image
     if 'image_path' in c and os.path.exists(c['image_path']):
-        img_w, img_h = (int(w * 0.45), h) if is_landscape else (w, int(h * 0.45))
-        ix, iy = (w - img_w, 0) if is_landscape else (0, 0)
+        img_w, img_h = (int(w * 0.45), h - header_h) if is_landscape else (w, int(h * 0.4))
+        ix, iy = (w - img_w, header_h) if is_landscape else (0, header_h)
             
         img = Image.open(c['image_path'])
         img = resize_to_fill(img, img_w, img_h)
@@ -298,22 +440,21 @@ def render_marketing_agency(ctx):
         overlay = Image.new('RGBA', (img_w, img_h), (0, 0, 0, 60))
         f.paste(overlay, (ix, iy), overlay)
 
-    # 3. Content Area (Refined Glassmorphism)
-    content_w = int(w * 0.5) if is_landscape else w
-    content_h = h if is_landscape else int(h * 0.6)
-    cx, cy = 0, 0 if is_landscape else (h - content_h)
-    
-    if is_landscape:
-        draw_glass_rect(f, (0, 0, content_w + 30, h), fill=(*secondary, 230), blur_radius=15)
-    else:
-        draw_glass_rect(f, (0, cy, w, h), fill=(*secondary, 220), blur_radius=20)
-
     # 4. Typography (Dynamic Scaling)
-    draw_y = cy + padding
-    content_w_inner = content_w - 2*padding
+    content_w = int(w * 0.5) if is_landscape else w
+    draw_y = header_h + int(padding * 0.8) if not is_landscape else padding
+    content_y_start = header_h if not is_landscape else 0
+    content_h_adjusted = h - header_h if not is_landscape else h
     
-    # Calculate safe headline area height (up to 35% of content area for better balance)
-    max_h_headline = int(content_h * 0.38)
+    if not is_template_bg:
+        if is_landscape:
+            draw_glass_rect(f, (0, 0, content_w + 30, h), fill=(*secondary, 230), blur_radius=15)
+        else:
+            draw_glass_rect(f, (0, header_h, w, h), fill=(*secondary, 220), blur_radius=20)
+
+    draw_y = content_y_start + padding
+    content_w_inner = content_w - 2*padding
+    max_h_headline = int(content_h_adjusted * 0.35)
     
     # Dynamic Headline (More conservative initial size for portrait)
     font_h_init = int(h * 0.12) if is_landscape else int(h * 0.085)
@@ -322,7 +463,8 @@ def render_marketing_agency(ctx):
     font_h = get_font(c['default_font'], h_size, bold=True)
     
     headline = c.get('headline', 'BE BOLD.').upper()
-    draw_y = draw_wrapped_text(d, headline, font_h, "#FFFFFF", content_w_inner, padding, draw_y, alignment="left", line_height=0.85)
+    text_color_h = "#1A1A1A" if is_template_bg else "#FFFFFF"
+    draw_y = draw_wrapped_text(d, headline, font_h, text_color_h, content_w_inner, padding, draw_y, alignment="left", line_height=0.85)
     
     # Accent Detail
     curr_y = draw_y + 12
@@ -343,13 +485,11 @@ def render_marketing_agency(ctx):
         body_size = calculate_optimal_font_size(d, body_text, c['default_font'], 
                                               content_w_inner, max_h_body, int(h * 0.028), bold=False, min_size=18)
         font_body = get_font(c['default_font'], body_size)
-        draw_wrapped_text(d, body_text, font_body, "#DDDDDD", content_w_inner, padding, draw_y, alignment="left", line_height=1.4)
+        text_color_b = "#444444" if is_template_bg else "#DDDDDD"
+        draw_wrapped_text(d, body_text, font_body, text_color_b, content_w_inner, padding, draw_y, alignment="left", line_height=1.4)
 
-    # 5. Branded Footer
-    footer_y = h - padding - 20
-    font_cta = get_font(c['default_font'], int(h * 0.03), bold=True)
-    cta_text = c.get('cta_text', 'WWW.CODEES-CM.COM').upper()
-    d.text((padding, footer_y), cta_text, font=font_cta, fill=primary)
+    # 5. Branded Footer (Professional Complex Layout)
+    draw_complex_footer(f, d, c, w, h, footer_h=200)
 
 def render_zenith_modern(ctx):
     """Zenith v3: Premium Aesthetic - Asset-aware, vertically balanced, and pattern-enriched."""
@@ -361,13 +501,14 @@ def render_zenith_modern(ctx):
 
     primary = hex_to_rgb(c.get('primary_color', '#0076BC'))
     accent = hex_to_rgb(c.get('accent_color', '#ED1C24'))
+    secondary = hex_to_rgb(c.get('secondary_color', '#1A1A1A'))
     is_landscape = w > h
 
     # 0. State Detection
     img_path = c.get('image_path', '')
     has_hero_img = bool(img_path and os.path.exists(img_path))
     bg_path = c.get('bg_image_path', '')
-    is_template_bg = 'template' in bg_path
+    is_template_bg = 'template' in bg_path or 'logo' in bg_path
     is_light = c.get('bg_color', '').upper() == '#FFFFFF' or is_template_bg
 
     # 1. Background Enhancement
@@ -382,11 +523,21 @@ def render_zenith_modern(ctx):
                 for i in range(h):
                     alpha = int(40 * (i / h))
                     d.line([(0, i), (w, i)], fill=(*primary, alpha))
+        
+        # Branded Header Box (To fill empty space at the top)
+        header_h = 140
+        d.rectangle([0, 0, w, header_h], fill="#FFFFFF")
+        d.rectangle([0, header_h - 10, w, header_h], fill=primary)
+        
+        # Logo in the Header
+        logo_path = c.get('logo_path', 'logo/image.png')
+        draw_logo(f, logo_path, (w/2, header_h/2 - 5), size=(200, 80))
 
     # 2. Main Hero Image (if provided)
     if has_hero_img:
-        img_w, img_h = (int(w * 0.5), h) if is_landscape else (w, int(h * 0.45))
-        ix, iy = (w - img_w, 0) if is_landscape else (0, 0)
+        header_h = 140
+        img_w, img_h = (int(w * 0.5), h - header_h) if is_landscape else (w, int(h * 0.4) - header_h)
+        ix, iy = (w - img_w, header_h) if is_landscape else (0, header_h)
         img = Image.open(img_path)
         img = resize_to_fill(img, img_w, img_h)
         f.paste(img, (ix, iy))
@@ -407,20 +558,19 @@ def render_zenith_modern(ctx):
         card_y = (h - card_h) // 2 if not has_hero_img else int(h * 0.32)
 
     # Multi-layered glass for premium feel
-    card_fill = (15, 23, 42, 230) if is_light else (255, 255, 255, 35)
-    draw_glass_rect(f, (card_x, card_y, card_x + card_w, card_y + card_h),
-                    fill=card_fill, blur_radius=25)
+    if not is_template_bg:
+        card_fill = (15, 23, 42, 230) if is_light else (255, 255, 255, 35)
+        draw_glass_rect(f, (card_x, card_y, card_x + card_w, card_y + card_h),
+                        fill=card_fill, blur_radius=25)
 
     # 4. Content inside card (Dynamic Typography)
     inner_padding = int(card_w * 0.1)
     curr_x = card_x + inner_padding
     curr_y = card_y + int(card_h * 0.08)
-    text_color = "#FFFFFF"
+    text_color = "#1A1A1A" if is_template_bg else "#FFFFFF"
 
-    # Logo (Refined sizing)
-    logo_path = c.get('logo_path', 'logo/image.png')
-    draw_logo(f, logo_path, (curr_x + 90, curr_y), size=(180, 70))
-    curr_y += int(card_h * 0.12)
+    # Headline Start
+    curr_y = card_y + int(card_h * 0.12)
 
     # Dynamic Headline (Tighter constraints)
     max_h_h = int(card_h * 0.35)
@@ -436,24 +586,41 @@ def render_zenith_modern(ctx):
     d.rectangle([curr_x, curr_y, curr_x + 80, curr_y + 4], fill=accent)
     curr_y += 25
     
-    # Dynamic Body
-    if c.get('body_text'):
+    # Tagline (Dynamic)
+    if c.get('tagline'):
+        font_tag = get_font(c['default_font'], int(card_h * 0.05), bold=True)
+        tag_color = primary if is_template_bg else accent
+        curr_y = draw_wrapped_text(d, c['tagline'], font_tag, tag_color, card_w - 2 * inner_padding, curr_x, curr_y, alignment="left")
+        curr_y += 15
+
+    # Dynamic Body / Features
+    if c.get('features'):
+        features = c.get('features')
+        curr_y += 10
+        for feat in features[:3]:
+            # Feature Icon
+            font_ic = get_font(c['default_font'], int(card_h * 0.04), bold=True)
+            text_color_ic = primary if is_template_bg else accent
+            d.text((curr_x, curr_y), "✓", font=font_ic, fill=text_color_ic)
+            
+            # Title
+            font_it = get_font(c['default_font'], int(card_h * 0.04), bold=True)
+            text_color_ft = "#1A1A1A" if is_template_bg else "#FFFFFF"
+            # Offset text to the right of the icon
+            d.text((curr_x + 35, curr_y), feat['title'], font=font_it, fill=text_color_ft)
+            curr_y += int(font_it.size * 1.5)
+        curr_y += 10
+        
+    elif c.get('body_text'):
         max_h_b = card_y + card_h - int(card_h * 0.15) - curr_y
         b_size = calculate_optimal_font_size(d, c['body_text'], c['default_font'], 
                                            card_w - 2*inner_padding, max_h_b, int(card_h * 0.045), bold=False, min_size=16)
         font_body = get_font(c['default_font'], b_size)
-        draw_wrapped_text(d, c['body_text'], font_body, "#DDDDDD", card_w - 2*inner_padding, curr_x, curr_y, alignment="left", line_height=1.4)
+        body_color = "#444444" if is_template_bg else "#DDDDDD"
+        draw_wrapped_text(d, c['body_text'], font_body, body_color, card_w - 2*inner_padding, curr_x, curr_y, alignment="left", line_height=1.4)
 
-    # 5. Branded Footer Details
-    footer_y = card_y + card_h - int(card_h * 0.12)
-    font_cta = get_font(c['default_font'], int(card_h * 0.04), bold=True)
-    cta_text = c.get('cta_text', 'WWW.CODEES-CM.COM').upper()
-    d.text((curr_x, footer_y), cta_text, font=font_cta, fill=primary)
-    
-    # Elegant Accent Strip at very bottom of screen
-    strip_h = 12
-    d.rectangle([0, h - strip_h, w, h], fill=primary)
-    d.rectangle([w - int(w*0.3), h - strip_h, w, h], fill=accent)
+    # 5. Branded Footer (Professional Complex Layout)
+    draw_complex_footer(f, d, c, w, h, footer_h=200)
 
 def render_codees_minimal(ctx):
     """Codees Clean v3: Sophisticated minimalist design, asset-aware and balanced."""
@@ -469,6 +636,7 @@ def render_codees_minimal(ctx):
     # Detect if we are using Template 4 (Pointing Woman on the right)
     bg_path = c.get('bg_image_path', '')
     is_template_4 = 'template_4' in bg_path
+    is_template_bg = 'template' in bg_path or 'logo' in bg_path
     
     padding = int(w * 0.08)
     content_w = int(w * 0.55) if is_template_4 else int(w * 0.85)
@@ -483,7 +651,7 @@ def render_codees_minimal(ctx):
         draw_geometric_pattern(f, (*primary, 20), type="dots")
     
     # 2. Content overlay for readability (Refined Glassmorphism)
-    if is_template_4:
+    if is_template_4 and not is_template_bg:
         draw_glass_rect(f, (0, 0, content_w + padding, h), fill=(255, 255, 255, 200), blur_radius=8)
 
     # 3. Logo (Premium placement)
@@ -494,14 +662,31 @@ def render_codees_minimal(ctx):
     # 4. Content Block (Dynamic Typography)
     curr_y = 280
     
+    # 4. Content Block (Dynamic Typography)
+    curr_y = 280
+    
+    # Calculate contrast dynamically because templates can be light or dark 
+    base_bg_color = '#FFFFFF' if is_template_bg else c.get('bg_color', '#FFFFFF')
+    contrast_text = "#1A1A1A" if get_brightness(base_bg_color) > 128 else "#FFFFFF"
+    
     # Dynamic Headline
     max_h_h = int(h * 0.3)
     h_init = int(h * 0.08)
     headline = c.get('headline', 'BUILD THE FUTURE').upper()
     h_size = calculate_optimal_font_size(d, headline, c['default_font'], content_w, max_h_h, h_init)
     font_h = get_font(c['default_font'], h_size, bold=True)
-    headline_color = c.get('headline_font_color', '#1A1A1A')
-    curr_y = draw_wrapped_text(d, headline, font_h, headline_color, content_w, text_x, curr_y, alignment=alignment, line_height=0.95)
+    curr_y = draw_wrapped_text(d, headline, font_h, contrast_text, content_w, text_x, curr_y, alignment=alignment, line_height=0.95)
+    
+    # Tagline (Dynamic)
+    if c.get('tagline'):
+        curr_y += 20
+        font_tag = get_font(c['default_font'], int(h * 0.035), bold=True)
+        # Use primary for tagline if background is light, otherwise try accent
+        tag_color = primary if get_brightness(base_bg_color) > 128 else accent
+        curr_y = draw_wrapped_text(d, c['tagline'], font_tag, tag_color, content_w, text_x, curr_y, alignment=alignment, line_height=1.2)
+
+    # 5. Professional Footer Items (Pills)
+    footer_y = h - 220
     
     # Body Text (Dynamic)
     if c.get('body_text'):
@@ -509,24 +694,15 @@ def render_codees_minimal(ctx):
         max_h_b = footer_y - 20 - curr_y
         b_size = calculate_optimal_font_size(d, c['body_text'], c['default_font'], content_w, max_h_b, int(h * 0.028), min_size=20)
         font_body = get_font(c['default_font'], b_size)
-        body_color = c.get('body_font_color', '#444444')
+        body_color = "#444444" if get_brightness(base_bg_color) > 128 else "#DDDDDD"
         curr_y = draw_wrapped_text(d, c['body_text'], font_body, body_color, content_w, text_x, curr_y, alignment=alignment, line_height=1.4)
     
-    # 5. Professional Footer
-    footer_y = h - 160
-    draw_accent_line(d, (padding, footer_y), (padding + content_w if is_template_4 else w - padding, footer_y), "#EEEEEE", width=1)
-    
-    # Contact Details
-    contact_parts = []
-    if c.get('contact_website'): contact_parts.append(c['contact_website'])
-    if c.get('contact_email'): contact_parts.append(c['contact_email'])
-    
-    if contact_parts:
-        contact_y = footer_y + 30
-        font_contact = get_font(c['default_font'], int(h * 0.022))
-        contact_color = c.get('contact_font_color', '#666666')
-        contact_text = "  |  ".join(contact_parts)
-        draw_wrapped_text(d, contact_text, font_contact, contact_color, content_w, text_x, contact_y, alignment=alignment)
+    # 5. Professional Footer Items (Pills)
+    draw_social_pills(d, c, w, h, h - 140, alignment="left" if is_template_4 else "center", padding=padding)
+
+    # Branded accent strip at bottom
+    draw_accent_line(d, (0, h-8), (w, h-8), primary, width=16)
+    draw_accent_line(d, (0, h-8), (w*0.3, h-8), accent, width=16)
 
     # 6. Branded Accent Details
     bar_h = 10
@@ -555,12 +731,14 @@ def render_codees_hero(ctx):
         d.rectangle([0, 0, w, h], fill='#1A1A2E')
 
     # 2. Gradient overlay – dark from bottom, fades up (ensures legibility)
-    gradient = Image.new('RGBA', (w, h), (0, 0, 0, 0))
-    gd = ImageDraw.Draw(gradient)
-    for i in range(h):
-        alpha = int(220 * (i / h) ** 1.4)   # stronger at bottom
-        gd.line([(0, i), (w, i)], fill=(0, 0, 0, alpha))
-    f.paste(Image.alpha_composite(f.convert('RGBA'), gradient).convert('RGB'), (0, 0))
+    is_template_bg = 'template' in c.get('bg_image_path', '') or 'logo' in c.get('bg_image_path', '')
+    if not is_template_bg:
+        gradient = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+        gd = ImageDraw.Draw(gradient)
+        for i in range(h):
+            alpha = int(220 * (i / h) ** 1.4)   # stronger at bottom
+            gd.line([(0, i), (w, i)], fill=(0, 0, 0, alpha))
+        f.paste(Image.alpha_composite(f.convert('RGBA'), gradient).convert('RGB'), (0, 0))
 
     # 3. Thin top bar (brand accent, 8 px)
     d.rectangle([0, 0, w, 8], fill=primary)
@@ -578,25 +756,32 @@ def render_codees_hero(ctx):
 
     font_tag  = get_font(c['default_font'], 30, bold=True)
     font_h    = get_font(c['default_font'], 88, bold=True)
-
+    
     # Small accent category label above headline
     tag_y = baseline - int(font_h.size * 1.2 * len(textwrap.wrap(headline, 16))) - 80
     d.text((padding_x, tag_y), tagline, font=font_tag, fill=(*accent, 255))
     draw_accent_line(d, (padding_x, tag_y + 44), (padding_x + 200, tag_y + 44), accent, width=3)
 
-    # Main headline (white, bold)
-    draw_wrapped_text(d, headline, font_h, '#FFFFFF', w * 0.75,
-                      padding_x + (w * 0.75) / 2, tag_y + 68,
+    # Main headline (Dynamic Contrast)
+    base_bg_color = '#FFFFFF' if is_template_bg else c.get('bg_color', '#1A1A2E')
+    text_color_h = "#1A1A1A" if get_brightness(base_bg_color) > 128 else "#FFFFFF"
+    
+    draw_wrapped_text(d, headline, font_h, text_color_h, w * 0.75,
+                      padding_x, tag_y + 68,
                       alignment='left', line_height=1.05)
 
     # 6. Footer strip
     footer_h = int(h * 0.065)
     d.rectangle([0, h - footer_h, w, h], fill=(*primary, 230))
     font_f   = get_font(c['default_font'], 24, bold=True)
-    cta      = c.get('cta_text', 'WWW.CODEES-CM.COM').lower()
+    # CTA / Website
+    cta      = c.get('cta_text', 'www.codees-cm.com').lower()
     cta_w    = font_f.getlength(cta)
-    d.text((padding_x, h - footer_h + (footer_h - 28) // 2), 'f  i  in  @codees', font=font_f, fill='#FFFFFF')
     d.text((w - padding_x - cta_w,  h - footer_h + (footer_h - 28) // 2), cta, font=font_f, fill='#FFFFFF')
+    
+    # Social Handle
+    soc_text = "@codees_cm"
+    d.text((padding_x, h - footer_h + (footer_h - 28) // 2), soc_text, font=font_f, fill='#FFFFFF')
 def render_social_post(ctx):
     """Social Post v2: Cleancentered design, tailored for Template 2 (Quotes)."""
     f = ctx['flyer']
@@ -662,15 +847,17 @@ def render_social_post(ctx):
         font_body = get_font(c['default_font'], b_size)
         curr_y = draw_wrapped_text(d, body_text, font_body, primary, text_w, text_x, curr_y, alignment="center", line_height=1.4)
 
-    # 3. Dynamic Branded Footer
+    # 3. Dynamic Branded Footer (Removed for Template 2 Quote Style)
     if not is_template_2:
-        footer_y = h - 80
-        cta_text = c.get('cta_text', 'WWW.CODEES-CM.COM').upper()
+        # Standard social post footer
+        footer_y = h - 140
+        cta_text = c.get('cta_text', 'www.codees-cm.com').upper()
         font_cta = get_font(c['default_font'], int(h * 0.025), bold=True)
         tw = font_cta.getlength(cta_text)
         d.text((w/2 - tw/2, footer_y), cta_text, font=font_cta, fill=secondary)
         # Accent Line
         d.rectangle([w/2 - 40, footer_y - 15, w/2 + 40, footer_y - 12], fill=primary)
+        draw_social_pills(d, c, w, h, footer_y + 35, alignment="center")
 
 def render_abstract_business(ctx):
     """Abstract Business: Bold diagonal + photo + dark panel + feature row."""
@@ -685,31 +872,35 @@ def render_abstract_business(ctx):
     dark     = (18, 18, 24)
 
     # ── 1. White base ──────────────────────────────────────────────────────────
-    if not c.get('bg_image_path'):
+    bg_path = c.get('bg_image_path', '')
+    is_template_bg = 'template' in bg_path or 'logo' in bg_path
+    if not bg_path:
         d.rectangle([0, 0, w, h], fill='#FFFFFF')
 
     # ── 2. Hero Photo (right side, clipped with diagonal) ──────────────────────
     photo_x = int(w * 0.30)   # photo starts here
     img_path = c.get('image_path', '')
-    if img_path and os.path.exists(img_path):
-        img = Image.open(img_path)
-        img = resize_to_fill(img, w - photo_x, int(h * 0.60))
-        # Darken slightly
-        ov = Image.new('RGBA', img.size, (0, 0, 0, 50))
-        img = Image.alpha_composite(img.convert('RGBA'), ov).convert('RGB')
-        f.paste(img, (photo_x, 0))
-    else:
-        d.rectangle([photo_x, 0, w, int(h * 0.60)], fill='#1A2640')
+    if not is_template_bg:
+        if img_path and os.path.exists(img_path):
+            img = Image.open(img_path)
+            img = resize_to_fill(img, w - photo_x, int(h * 0.60))
+            # Darken slightly
+            ov = Image.new('RGBA', img.size, (0, 0, 0, 50))
+            img = Image.alpha_composite(img.convert('RGBA'), ov).convert('RGB')
+            f.paste(img, (photo_x, 0))
+        else:
+            d.rectangle([photo_x, 0, w, int(h * 0.60)], fill='#1A2640')
 
     # ── 3. Diagonal overlay (left accent block) ─────────────────────────────────
     # Yellow/primary diagonal block: covers top-left, angled right
-    split_x   = int(w * 0.52)
-    split_top = int(h * 0.40)
-    d.polygon([
-        (0, 0), (split_x, 0),
-        (int(w * 0.32), split_top),
-        (0, split_top)
-    ], fill=primary)
+    if not is_template_bg:
+        split_x   = int(w * 0.52)
+        split_top = int(h * 0.40)
+        d.polygon([
+            (0, 0), (split_x, 0),
+            (int(w * 0.32), split_top),
+            (0, split_top)
+        ], fill=primary)
 
     # ── 4. Company name + logo top-left ────────────────────────────────────────
     logo_path = c.get('logo_path', 'logo/image.png')
@@ -719,8 +910,9 @@ def render_abstract_business(ctx):
     font_h = get_font(c['default_font'], 80, bold=True)
     headline = c.get('headline', 'CODEES\nCOMPANY').upper()
     curr_y = int(h * 0.12)
+    text_color_h = dark if is_template_bg else '#FFFFFF'
     for line in textwrap.wrap(headline, width=12):
-        d.text((50, curr_y), line, font=font_h, fill='#FFFFFF')
+        d.text((50, curr_y), line, font=font_h, fill=text_color_h)
         curr_y += int(font_h.size * 1.1)
     # Red underline accent
     d.rectangle([50, curr_y + 6, 50 + 100, curr_y + 12], fill=accent)
@@ -748,19 +940,22 @@ def render_abstract_business(ctx):
     draw_logo(f, logo_path, (logo_box_x + logo_box_w // 2, logo_box_y + 30), size=(180, 80))
 
     # Decorative rotated squares
-    draw_rotated_square(d, w - 60, 80, 70, 20, dark, 200)
-    draw_rotated_square(d, w - 110, 130, 45, 35, dark, 150)
-    draw_rotated_square(d, w - 40, 160, 30, 50, primary, 200)
+    if not is_template_bg:
+        draw_rotated_square(d, w - 60, 80, 70, 20, dark, 200)
+        draw_rotated_square(d, w - 110, 130, 45, 35, dark, 150)
+        draw_rotated_square(d, w - 40, 160, 30, 50, primary, 200)
 
     # ── 7. Dark bottom panel ───────────────────────────────────────────────────
     panel_y = int(h * 0.52)
-    d.rectangle([0, panel_y, w, h], fill=dark)
+    if not is_template_bg:
+        d.rectangle([0, panel_y, w, h], fill=dark)
 
     # Centered sub-headline
     sub = c.get('sub_headline', 'ABSTRACT BUSINESS').upper()
     font_sub = get_font(c['default_font'], 52, bold=True)
     sub_w = font_sub.getlength(sub)
-    d.text(((w - sub_w) / 2, panel_y + 40), sub, font=font_sub, fill='#FFFFFF')
+    text_color_sub = dark if is_template_bg else '#FFFFFF'
+    d.text(((w - sub_w) / 2, panel_y + 40), sub, font=font_sub, fill=text_color_sub)
 
     # Sub-tagline
     tag = c.get('tagline', 'LOREM IPSUM DOLORES').upper()
@@ -771,7 +966,8 @@ def render_abstract_business(ctx):
     # Body text
     body = c.get('body_text', 'Join the fastest-growing tech community in Cameroon. We connect developers, designers, and entrepreneurs to create impact.')
     font_b = get_font(c['default_font'], 22)
-    draw_wrapped_text(d, body, font_b, '#CCCCCC', w * 0.76, w / 2, panel_y + 155, alignment='center', line_height=1.5)
+    text_color_b = '#444444' if is_template_bg else '#CCCCCC'
+    draw_wrapped_text(d, body, font_b, text_color_b, w * 0.76, w / 2, panel_y + 155, alignment='center', line_height=1.5)
 
     # ── 8. Feature icons row ───────────────────────────────────────────────────
     features = c.get('features') or [
@@ -793,28 +989,18 @@ def render_abstract_business(ctx):
         # Title
         font_it = get_font(c['default_font'], 22, bold=True)
         it_w = font_it.getlength(feat['title'])
-        d.text((cx - it_w / 2, icon_y + r + 12), feat['title'], font=font_it, fill='#FFFFFF')
+        text_color_ft = dark if is_template_bg else '#FFFFFF'
+        d.text((cx - it_w / 2, icon_y + r + 12), feat['title'], font=font_it, fill=text_color_ft)
         # Desc
         font_id = get_font(c['default_font'], 18)
-        draw_wrapped_text(d, feat.get('desc', ''), font_id, '#AAAAAA', col_w - 40, cx, icon_y + r + 46, alignment='center', line_height=1.35)
+        text_color_fc = '#666666' if is_template_bg else '#AAAAAA'
+        draw_wrapped_text(d, feat.get('desc', ''), font_id, text_color_fc, col_w - 40, cx, icon_y + r + 46, alignment='center', line_height=1.35)
 
     # ── 9. Social footer strip ─────────────────────────────────────────────────
-    footer_h = int(h * 0.052)
+    footer_h = int(h * 0.08)
     footer_y = h - footer_h
     d.rectangle([0, footer_y, w, h], fill=primary)
-    font_f   = get_font(c['default_font'], 20, bold=True)
-    socials  = [
-        ('f', c.get('facebook',  '@codees')),
-        ('w', c.get('whatsapp', '+237 600 000 000')),
-        ('in', c.get('instagram', '@codees_cm')),
-        ('☎', c.get('phone',     'www.codees-cm.com')),
-    ]
-    seg_w  = w // len(socials)
-    for i, (icon, label) in enumerate(socials):
-        sx  = seg_w * i + seg_w // 2
-        txt = f'{icon}  {label}'
-        tw  = font_f.getlength(txt)
-        d.text((sx - tw / 2, footer_y + (footer_h - 24) // 2), txt, font=font_f, fill='#FFFFFF')
+    draw_social_pills(d, c, w, h, footer_y + (footer_h - 42) // 2, alignment="center")
 
 
 def render_abstract_social(ctx):
@@ -835,29 +1021,33 @@ def render_abstract_social(ctx):
     dark    = (18, 18, 24)
 
     # 1. White base
-    if not c.get('bg_image_path'):
+    bg_path = c.get('bg_image_path', '')
+    is_template_bg = 'template' in bg_path or 'logo' in bg_path
+    if not bg_path:
         d.rectangle([0, 0, w, h], fill='#FFFFFF')
 
     # 2. Hero photo (top 55%)
     photo_h = int(h * 0.55)
     img_path = c.get('image_path', '')
-    if img_path and os.path.exists(img_path):
-        img = Image.open(img_path)
-        img = resize_to_fill(img, w, photo_h)
-        ov  = Image.new('RGBA', img.size, (0, 0, 0, 60))
-        img = Image.alpha_composite(img.convert('RGBA'), ov).convert('RGB')
-        f.paste(img, (0, 0))
-    else:
-        d.rectangle([0, 0, w, photo_h], fill='#1A2640')
+    if not is_template_bg:
+        if img_path and os.path.exists(img_path):
+            img = Image.open(img_path)
+            img = resize_to_fill(img, w, photo_h)
+            ov  = Image.new('RGBA', img.size, (0, 0, 0, 60))
+            img = Image.alpha_composite(img.convert('RGBA'), ov).convert('RGB')
+            f.paste(img, (0, 0))
+        else:
+            d.rectangle([0, 0, w, photo_h], fill='#1A2640')
 
     # 3. Primary diagonal block (covers top-left)
     diag_w = int(w * 0.55)
     diag_h = int(h * 0.38)
-    d.polygon([
-        (0, 0), (diag_w, 0),
-        (int(w * 0.38), diag_h),
-        (0, diag_h)
-    ], fill=primary)
+    if not is_template_bg:
+        d.polygon([
+            (0, 0), (diag_w, 0),
+            (int(w * 0.38), diag_h),
+            (0, diag_h)
+        ], fill=primary)
 
     # 4. Logo top-left (on primary block)
     logo_path = c.get('logo_path', 'logo/image.png')
@@ -867,8 +1057,9 @@ def render_abstract_social(ctx):
     font_h   = get_font(c['default_font'], 70, bold=True)
     headline = c.get('headline', 'JOIN CODEES').upper()
     curr_y   = int(h * 0.10)
+    text_color_h = dark if is_template_bg else '#FFFFFF'
     for line in textwrap.wrap(headline, width=10):
-        d.text((44, curr_y), line, font=font_h, fill='#FFFFFF')
+        d.text((44, curr_y), line, font=font_h, fill=text_color_h)
         curr_y += int(font_h.size * 1.08)
     d.rectangle([44, curr_y + 6, 44 + 80, curr_y + 12], fill=accent)
 
@@ -876,13 +1067,15 @@ def render_abstract_social(ctx):
     def draw_diamond(cx_, cy_, size_, color_):
         pts = [(cx_, cy_ - size_), (cx_ + size_, cy_), (cx_, cy_ + size_), (cx_ - size_, cy_)]
         d.polygon(pts, fill=color_)
-    draw_diamond(w - 55, 55, 48, (*dark, 200))
-    draw_diamond(w - 100, 110, 30, (*dark, 140))
-    draw_diamond(w - 32, 120, 22, (*primary, 220))
+    if not is_template_bg:
+        draw_diamond(w - 55, 55, 48, (*dark, 200))
+        draw_diamond(w - 100, 110, 30, (*dark, 140))
+        draw_diamond(w - 32, 120, 22, (*primary, 220))
 
     # 7. Dark bottom panel
     panel_y = int(h * 0.52)
-    d.rectangle([0, panel_y, w, h], fill=dark)
+    if not is_template_bg:
+        d.rectangle([0, panel_y, w, h], fill=dark)
 
     # Sub-headline centered
     sub      = c.get('sub_headline', c.get('headline', 'CODEES COMMUNITY')).upper()
@@ -891,9 +1084,10 @@ def render_abstract_social(ctx):
     # Wrap if needed
     sub_lines = textwrap.wrap(sub, width=18)
     sy = panel_y + 30
+    text_color_sub = dark if is_template_bg else '#FFFFFF'
     for sl in sub_lines:
         slw = font_sub.getlength(sl)
-        d.text(((w - slw) / 2, sy), sl, font=font_sub, fill='#FFFFFF')
+        d.text(((w - slw) / 2, sy), sl, font=font_sub, fill=text_color_sub)
         sy += int(font_sub.size * 1.1)
 
     # Tagline
@@ -907,21 +1101,18 @@ def render_abstract_social(ctx):
     cta_w    = int(font_cta.getlength(cta_txt)) + 60
     cta_x    = (w - cta_w) // 2
     cta_y    = h - int(h * 0.155)
+    
+    # Hide the button block if template bg is used, but still draw text maybe? Or draw button as is?
+    # Actually button looks fine anywhere.
     d.rounded_rectangle([cta_x, cta_y, cta_x + cta_w, cta_y + 56], radius=8, fill=primary)
     tw2 = font_cta.getlength(cta_txt)
     d.text((cta_x + (cta_w - tw2) / 2, cta_y + 14), cta_txt, font=font_cta, fill='#FFFFFF')
 
     # 9. Social handles footer
-    footer_h2 = int(h * 0.062)
+    footer_h2 = int(h * 0.08)
     fy2       = h - footer_h2
     d.rectangle([0, fy2, w, h], fill=primary)
-    font_f2   = get_font(c['default_font'], 21, bold=True)
-    socials   = [('f', c.get('facebook', '@codees')), ('in', c.get('instagram', '@codees_cm'))]
-    seg2      = w // (len(socials) + 1)
-    for i, (icon, label) in enumerate(socials, 1):
-        txt2 = f'{icon}  {label}'
-        tw3  = font_f2.getlength(txt2)
-        d.text((seg2 * i - tw3 / 2, fy2 + (footer_h2 - 26) // 2), txt2, font=font_f2, fill='#FFFFFF')
+    draw_social_pills(d, c, w, h, fy2 + (footer_h2 - 42) // 2, alignment="center")
 
     # Copy back to ctx
     ctx['flyer'] = f
@@ -989,14 +1180,20 @@ def generate_flyer(params):
                 for k, v in template_defaults[target_key].items():
                     if k not in params: # Only apply if not sent by user
                         config[k] = v
-            
-            # Resolve template image path if not already provided as background
-            if not config.get('bg_image_path'):
-                template_img_path = os.path.join(os.path.dirname(__file__), 'template', f"{target_key}.png")
-                if os.path.exists(template_img_path):
-                    config['bg_image_path'] = template_img_path
         else:
             print(f"DEBUG: Template '{params['template']}' not found in mapping")
+            
+    tid = config.get('template_id')
+    
+    # Reverse mapping to auto-load background image if not set
+    if not config.get('bg_image_path') and tid:
+        reverse_mapping = {v: k for k, v in template_mapping.items()}
+        mapped_template_name = reverse_mapping.get(tid)
+        # Only auto-load if it's a 'template_N' image and not a 'logo' or other string
+        if mapped_template_name and mapped_template_name.startswith('template_'):
+            template_img_path = os.path.join(os.path.dirname(__file__), 'template', f"{mapped_template_name}.png")
+            if os.path.exists(template_img_path):
+                config['bg_image_path'] = template_img_path
     
     if isinstance(config.get('features'), str):
         try: config['features'] = json.loads(config['features'])
@@ -1004,8 +1201,6 @@ def generate_flyer(params):
 
     width = int(config['flyer_width'])
     height = int(config['flyer_height'])
-    
-    tid = config.get('template_id')
     
     # Auto-adjust dimensions for social media if not provided
     if tid == 'social_post' and 'flyer_width' not in params:
