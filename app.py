@@ -57,23 +57,18 @@ def generate_flyer_endpoint():
             img_path = os.path.join(app.config['UPLOAD_FOLDER'], img_filename)
             main_image.save(img_path)
             temp_files.append(img_path)
-        else:
-            # Use default image.png as fallback
+        
+        template_name = request.form.get('template')
+
+        # Use default image.png as fallback ONLY if no image and no template
+        if not img_path and not template_name:
             default_path = os.path.join(os.path.dirname(__file__), 'image.png')
             if os.path.exists(default_path):
                 img_path = default_path
 
-        # Background image (optional)
+        # Background image (manual upload)
         bg_image_path = None
-        template_name = request.form.get('template')
-        
-        if template_name:
-            # Use template from template folder as background base
-            template_path = os.path.join(os.path.dirname(__file__), 'template', f"{template_name}.png")
-            if not os.path.exists(template_path):
-                return jsonify({"error": f"Template '{template_name}' not found"}), 400
-            bg_image_path = template_path
-        elif 'bg_image' in request.files:
+        if 'bg_image' in request.files:
             bg_image = request.files['bg_image']
             if bg_image and bg_image.filename != '' and allowed_file(bg_image.filename):
                 bg_filename = secure_filename(f"bg_{uuid.uuid4()}_{bg_image.filename}")
@@ -81,7 +76,7 @@ def generate_flyer_endpoint():
                 bg_image.save(bg_image_path)
                 temp_files.append(bg_image_path)
 
-        if not img_path and not bg_image_path:
+        if not img_path and not template_name and not bg_image_path:
             return jsonify({"error": "No template, image, or background image found"}), 400
 
         # Extract parameters
@@ -90,8 +85,6 @@ def generate_flyer_endpoint():
             params['image_path'] = img_path
         if bg_image_path:
             params['bg_image_path'] = bg_image_path
-        
-        # Add template parameter if it was specified
         if template_name:
             params['template'] = template_name
 

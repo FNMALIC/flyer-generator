@@ -289,7 +289,7 @@ def render_zenith_modern(ctx):
 
     # 1. Full-bleed Background Image with dark vignette
     img_path = c.get('image_path', '')
-    if img_path and os.path.exists(img_path):
+    if img_path and os.path.exists(img_path) and not c.get('bg_image_path'):
         img = Image.open(img_path)
         img = resize_to_fill(img, w, h)
         overlay = Image.new('RGBA', (w, h), (0, 0, 0, 120))
@@ -441,7 +441,7 @@ def render_codees_hero(ctx):
 
     # 1. Hero Image (or dark background)
     img_path = c.get('image_path', '')
-    if img_path and os.path.exists(img_path):
+    if img_path and os.path.exists(img_path) and not c.get('bg_image_path'):
         img = Image.open(img_path)
         img = resize_to_fill(img, w, h)
         f.paste(img, (0, 0))
@@ -832,6 +832,13 @@ def generate_flyer(params):
         if template_name in template_mapping:
             config['template_id'] = template_mapping[template_name]
             print(f"DEBUG: Template '{template_name}' mapped to template_id '{config['template_id']}'")
+            
+            # Resolve template image path if not already provided as background
+            if not config.get('bg_image_path'):
+                template_img_path = os.path.join(os.path.dirname(__file__), 'template', f"{template_name}.png")
+                if os.path.exists(template_img_path):
+                    config['bg_image_path'] = template_img_path
+                    print(f"DEBUG: Using template image: {template_img_path}")
         else:
             print(f"DEBUG: Template '{template_name}' not found in mapping")
     else:
