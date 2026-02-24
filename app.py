@@ -86,6 +86,10 @@ def generate_flyer_endpoint():
         }
         if bg_image_path:
             params['bg_image_path'] = bg_image_path
+        
+        # Add template parameter if it was specified
+        if template_name:
+            params['template'] = template_name
 
         # Layout & General
         basic_params = [

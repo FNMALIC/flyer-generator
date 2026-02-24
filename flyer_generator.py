@@ -825,6 +825,11 @@ def generate_flyer(params):
         template_name = params['template']
         if template_name in template_mapping:
             config['template_id'] = template_mapping[template_name]
+            print(f"DEBUG: Template '{template_name}' mapped to template_id '{config['template_id']}'")
+        else:
+            print(f"DEBUG: Template '{template_name}' not found in mapping")
+    else:
+        print("DEBUG: No template parameter found")
     
     if isinstance(config.get('features'), str):
         try: config['features'] = json.loads(config['features'])
@@ -851,22 +856,30 @@ def generate_flyer(params):
         ctx['draw'] = ImageDraw.Draw(flyer)
 
     if tid == 'marketing_agency':
+        print("DEBUG: Calling render_marketing_agency")
         render_marketing_agency(ctx)
     elif tid == 'social_post':
+        print("DEBUG: Calling render_social_post")
         render_social_post(ctx)
     elif tid == 'zenith_modern':
+        print("DEBUG: Calling render_zenith_modern")
         render_zenith_modern(ctx)
     elif tid == 'codees_minimal':
+        print("DEBUG: Calling render_codees_minimal")
         render_codees_minimal(ctx)
     elif tid == 'codees_hero':
+        print("DEBUG: Calling render_codees_hero")
         render_codees_hero(ctx)
     elif tid == 'abstract_business':
+        print("DEBUG: Calling render_abstract_business")
         render_abstract_business(ctx)
     elif tid == 'abstract_social':
+        print("DEBUG: Calling render_abstract_social")
         render_abstract_social(ctx)
         # pick updated flyer from ctx after social template resizes it
         flyer = ctx['flyer']
     else:
+        print(f"DEBUG: No matching template_id '{tid}', calling render_modern_corporate")
         render_modern_corporate(ctx)
 
     img_byte_arr = io.BytesIO()
