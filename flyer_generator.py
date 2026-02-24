@@ -312,11 +312,11 @@ def render_marketing_agency(ctx):
     draw_y = cy + padding
     content_w_inner = content_w - 2*padding
     
-    # Calculate safe headline area height (up to 40% of content area)
-    max_h_headline = int(content_h * 0.45)
+    # Calculate safe headline area height (up to 35% of content area for better balance)
+    max_h_headline = int(content_h * 0.38)
     
-    # Dynamic Headline
-    font_h_init = int(h * 0.15) if is_landscape else int(h * 0.1)
+    # Dynamic Headline (More conservative initial size for portrait)
+    font_h_init = int(h * 0.12) if is_landscape else int(h * 0.085)
     h_size = calculate_optimal_font_size(d, c.get('headline', 'BE BOLD.'), c['default_font'], 
                                        content_w_inner, max_h_headline, font_h_init)
     font_h = get_font(c['default_font'], h_size, bold=True)
@@ -422,9 +422,9 @@ def render_zenith_modern(ctx):
     draw_logo(f, logo_path, (curr_x + 90, curr_y), size=(180, 70))
     curr_y += int(card_h * 0.12)
 
-    # Dynamic Headline
-    max_h_h = int(card_h * 0.4)
-    h_init = int(card_h * 0.16) if is_landscape else int(card_h * 0.12)
+    # Dynamic Headline (Tighter constraints)
+    max_h_h = int(card_h * 0.35)
+    h_init = int(card_h * 0.14) if is_landscape else int(card_h * 0.10)
     headline = c.get('headline', 'ELEVATING STANDARDS').upper()
     h_size = calculate_optimal_font_size(d, headline, c['default_font'], 
                                        card_w - 2*inner_padding, max_h_h, h_init)

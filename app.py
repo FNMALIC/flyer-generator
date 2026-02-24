@@ -47,22 +47,19 @@ def generate_flyer_endpoint():
     try:
         # Get data from JSON
         try:
-            # First, try standard parsing
+            import json
+            # First, try standard parsing via Flask
             data = request.get_json(force=True) if request.data else {}
         except Exception:
-            # If standard parsing fails, attempt to repair raw newlines (common in n8n)
+            # If standard parsing fails, use json.loads with strict=False
+            # This allows control characters like raw newlines inside strings
             try:
-                import json
                 raw_data = request.data.decode('utf-8', errors='ignore')
-                # A simple but effective repair: replace literal newlines with escaped \n
-                # Note: This is safe for simple flyer-gen payloads
-                repaired_data = raw_data.replace('\n', '\\n').replace('\r', '')
-                # Re-parse the "repaired" string
-                data = json.loads(repaired_data)
-                app.logger.info("Successfully repaired malformed JSON (raw newlines detected)")
+                data = json.loads(raw_data, strict=False)
+                app.logger.info("Successfully parsed JSON with strict=False (raw newlines allowed)")
             except Exception as e:
                 return jsonify({
-                    "error": "Malformed JSON payload. Could not automatically repair the request.",
+                    "error": "Malformed JSON payload. Even with relaxed parsing, the request is invalid.",
                     "details": str(e)
                 }), 400
             
