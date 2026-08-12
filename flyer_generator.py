@@ -9,34 +9,49 @@ from config import DEFAULT_CONFIG
 # Global font cache to speed up dynamic scaling
 _FONT_CACHE = {}
 
-def get_font(font_name_or_path, size, bold=False):
-    """Try to load a font, with caching for performance."""
-    cache_key = (str(font_name_or_path), size, bold)
+def get_font(font_name_or_path, size, bold=False, style=None):
+    """
+    Try to load a font, with caching for performance.
+    style: "regular" | "bold" | "oblique" | "bold_oblique" - selects the matching
+    DejaVuSans variant (all shipped via the fonts-dejavu-core package the Dockerfile
+    already installs) so headline/tagline/body can each have a distinct typographic
+    voice instead of the whole flyer using one weight. Falls back to `bold` for
+    existing call sites that don't pass `style`.
+    """
+    if style is None:
+        style = "bold" if bold else "regular"
+    cache_key = (str(font_name_or_path), size, style)
     if cache_key in _FONT_CACHE:
         return _FONT_CACHE[cache_key]
-        
+
+    variant_suffix = {
+        "regular": "",
+        "bold": "-Bold",
+        "oblique": "-Oblique",
+        "bold_oblique": "-BoldOblique",
+    }.get(style, "")
+
     try:
         # Check if it's a direct path
         if os.path.exists(str(font_name_or_path)):
             font = ImageFont.truetype(str(font_name_or_path), size)
         else:
-            # Try common paths for DejaVuSans
-            font_paths = []
-            if bold:
-                 font_paths.append("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
-            font_paths.extend([
+            # Try the requested variant first, then fall back toward plain regular
+            font_paths = [p for p in [
+                f"/usr/share/fonts/truetype/dejavu/DejaVuSans{variant_suffix}.ttf",
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if style in ("bold", "bold_oblique") else None,
                 "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-                "DejaVuSans.ttf"
-            ])
-            
+                "DejaVuSans.ttf",
+            ] if p]
+
             font = ImageFont.load_default()
             for path in font_paths:
                 try:
                     font = ImageFont.truetype(path, size)
                     break
-                except:
+                except Exception:
                     continue
-                    
+
         _FONT_CACHE[cache_key] = font
         return font
     except Exception:
@@ -78,6 +93,63 @@ def get_contrast_color(bg_color):
     """Return white or black depending on which has better contrast with bg_color."""
     return "#FFFFFF" if get_brightness(bg_color) < 128 else "#000000"
 
+def sample_region_brightness(image, box):
+    """
+    Sample the ACTUAL composited pixels within box (photo + gradient + pattern,
+    whatever has already been drawn) and return average perceived brightness (0-255).
+    This replaces guessing legibility from a hex config value or a filename check.
+    """
+    x1, y1, x2, y2 = [int(round(v)) for v in box]
+    x1 = max(0, min(x1, image.width - 1))
+    y1 = max(0, min(y1, image.height - 1))
+    x2 = max(x1 + 1, min(x2, image.width))
+    y2 = max(y1 + 1, min(y2, image.height))
+    region = image.convert('RGB').crop((x1, y1, x2, y2)).resize((1, 1), Image.Resampling.BOX)
+    return get_brightness(region.getpixel((0, 0)))
+
+def ensure_legible(image, box, dark_text="#1A1A1A", light_text="#FFFFFF", add_scrim=True, scrim_padding=14):
+    """
+    Sample the real pixels behind `box` on the already-composited flyer and return
+    whichever of dark_text/light_text has better contrast. If contrast is marginal
+    (busy photo, mid-tone background), paste a soft scrim behind the box first so
+    text is guaranteed readable regardless of what's underneath.
+    Returns the chosen text color (str).
+    """
+    brightness = sample_region_brightness(image, box)
+    text_color = dark_text if brightness > 140 else light_text
+    if add_scrim and 85 < brightness < 190:
+        x1, y1, x2, y2 = box
+        x1 = max(0, int(x1 - scrim_padding))
+        y1 = max(0, int(y1 - scrim_padding))
+        x2 = min(image.width, int(x2 + scrim_padding))
+        y2 = min(image.height, int(y2 + scrim_padding))
+        if x2 > x1 and y2 > y1:
+            scrim_fill = (0, 0, 0, 95) if text_color == light_text else (255, 255, 255, 140)
+            overlay = Image.new('RGBA', (x2 - x1, y2 - y1), scrim_fill)
+            image.paste(overlay, (x1, y1), overlay)
+    return text_color
+
+def estimate_text_box(text, font, x_pos, y_start, max_width, alignment="left", line_height=1.2, min_lines=1):
+    """
+    Cheaply estimate the (x1, y1, x2, y2) box a wrapped text block will occupy,
+    without actually drawing it. Used to sample background brightness BEFORE
+    committing to a text color. Errs slightly generous (extra line) so the scrim
+    never comes up short of the real drawn text.
+    """
+    if not text:
+        text = ""
+    avg_char_width = font.getlength("x") if hasattr(font, 'getlength') else 10
+    chars_per_line = max(1, int(max_width / avg_char_width))
+    n_lines = max(min_lines, len(textwrap.wrap(str(text), width=chars_per_line)) or 1) + 1
+    height = font.size * line_height * n_lines
+    if alignment == "left":
+        x1, x2 = x_pos, x_pos + max_width
+    elif alignment == "right":
+        x1, x2 = x_pos - max_width, x_pos
+    else:
+        x1, x2 = x_pos - max_width / 2, x_pos + max_width / 2
+    return (x1, y_start, x2, y_start + height)
+
 def draw_drop_shadow(image, shape_func, offset=(10, 10), iterations=10, shadow_color=(0, 0, 0, 100)):
     """
     Draw a drop shadow for a shape.
@@ -102,6 +174,8 @@ def draw_accent_line(draw, start, end, color, width=2, opacity=150):
     rgb = hex_to_rgb(color) if isinstance(color, str) else color
     draw.line([start, end], fill=(*rgb, opacity) if len(rgb) == 3 else rgb, width=width)
 
+GEOMETRIC_PATTERN_TYPES = ("dots", "lines", "diagonal", "grid")
+
 def draw_geometric_pattern(image, color, type="dots"):
     """Draw subtle geometric patterns in the background."""
     draw = ImageDraw.Draw(image, 'RGBA')
@@ -112,7 +186,7 @@ def draw_geometric_pattern(image, color, type="dots"):
         fill = (*color, 40)
     else:
         fill = color
-    
+
     if type == "dots":
         step = 40
         for x in range(0, w, step):
@@ -122,6 +196,16 @@ def draw_geometric_pattern(image, color, type="dots"):
         step = 60
         for i in range(0, w + h, step):
             draw.line([(i, 0), (0, i)], fill=fill, width=1)
+    elif type == "diagonal":
+        step = 50
+        for i in range(-h, w, step):
+            draw.line([(i, 0), (i + h, h)], fill=fill, width=3)
+    elif type == "grid":
+        step = 70
+        for x in range(0, w, step):
+            draw.line([(x, 0), (x, h)], fill=fill, width=1)
+        for y in range(0, h, step):
+            draw.line([(0, y), (w, y)], fill=fill, width=1)
 
 def draw_wrapped_text(draw, text, font, color, max_width, x_pos, y_start, alignment="center", line_height=1.2):
     """
@@ -151,8 +235,64 @@ def draw_wrapped_text(draw, text, font, color, max_width, x_pos, y_start, alignm
         curr_y += line_spacing
     return curr_y
 
-def draw_logo(image, logo_path, position, size=(150, 150)):
-    """Helper to draw the logo at a specific position."""
+def draw_tracked_text(draw, text, font, color, x_pos, y, tracking=0, alignment="left"):
+    """
+    Draw a single line of text with added letter-spacing (tracking).
+    The available font (DejaVuSans Regular/Bold only - no italic/oblique variant
+    ships with fonts-dejavu-core) can't express a second typographic voice through
+    style alone, so short kicker/tagline/CTA labels use real tracking instead to
+    read as deliberately "designed" rather than just a smaller headline.
+    Returns the total rendered width.
+    """
+    if not text:
+        return 0
+    text = str(text)
+    widths = [font.getlength(ch) for ch in text]
+    total_w = sum(widths) + tracking * max(0, len(text) - 1)
+    if alignment == "left":
+        cx = x_pos
+    elif alignment == "right":
+        cx = x_pos - total_w
+    else:
+        cx = x_pos - total_w / 2
+    for ch, cw in zip(text, widths):
+        draw.text((cx, y), ch, font=font, fill=color)
+        cx += cw + tracking
+    return total_w
+
+def draw_wrapped_tracked_text(draw, text, font, color, max_width, x_pos, y_start, alignment="left", line_height=1.3, tracking=None):
+    """Like draw_wrapped_text, but each line is drawn with letter-spacing (see draw_tracked_text)."""
+    if not text:
+        return y_start
+    if tracking is None:
+        tracking = max(1, int(font.size * 0.12))
+    text = str(text).replace('\\n', '\n')
+    avg_char_width = (font.getlength("x") if hasattr(font, 'getlength') else 10) + tracking
+    chars_per_line = max(1, int(max_width / avg_char_width))
+    lines = []
+    for section in text.split('\n'):
+        if section.strip() == "":
+            lines.append("")
+        else:
+            lines.extend(textwrap.wrap(section, width=chars_per_line))
+    curr_y = y_start
+    line_spacing = font.size * line_height
+    for line in lines:
+        if line == "":
+            curr_y += line_spacing / 2
+            continue
+        draw_tracked_text(draw, line, font, color, x_pos, curr_y, tracking=tracking, alignment=alignment)
+        curr_y += line_spacing
+    return curr_y
+
+def draw_logo(image, logo_path, position, size=(150, 150), auto_backing=True):
+    """
+    Helper to draw the logo at a specific position.
+    The shipped logo asset has no reversed/light variant baked in, so on a dark
+    background it would otherwise render illegibly. auto_backing samples the real
+    pixels under the logo's footprint and drops a light rounded plate behind it
+    whenever that region is too dark for the logo to read.
+    """
     if not logo_path or not os.path.exists(logo_path):
         return
     try:
@@ -163,7 +303,16 @@ def draw_logo(image, logo_path, position, size=(150, 150)):
             x = int(position[0] - logo.width / 2)
         else:
             x = position[0]
-        image.paste(logo, (int(x), int(position[1])), logo)
+        y = int(position[1])
+        if auto_backing:
+            pad = 14
+            box = (x - pad, y - pad, x + logo.width + pad, y + logo.height + pad)
+            if sample_region_brightness(image, box) < 150:
+                plate = Image.new('RGBA', image.size, (0, 0, 0, 0))
+                pd = ImageDraw.Draw(plate)
+                pd.rounded_rectangle(box, radius=10, fill=(255, 255, 255, 235))
+                image.paste(plate, (0, 0), plate)
+        image.paste(logo, (int(x), y), logo)
     except Exception as e:
         print(f"Error drawing logo: {e}")
 
@@ -288,6 +437,34 @@ def draw_complex_footer(image, draw, config, w, h, footer_h=180):
 
     return footer_y
 
+def draw_pills_footer(image, draw, config, w, h, footer_h=140):
+    """
+    Lighter-weight footer alternative to draw_complex_footer: a thin brand accent
+    strip plus centered social/contact pills - the same components
+    render_codees_minimal already uses for its own identity. Exists so
+    draw_footer_variant() can give marketing_agency/zenith_modern a second,
+    still-on-brand footer composition instead of always rendering the identical
+    multi-column footer.
+    """
+    primary = hex_to_rgb(config.get('primary_color', '#0076BC'))
+    accent = hex_to_rgb(config.get('accent_color', '#ED1C24'))
+    bar_h = 10
+    draw.rectangle([0, h - bar_h, w, h], fill=primary)
+    draw.rectangle([0, h - bar_h - 4, w * 0.3, h - bar_h], fill=accent)
+    draw_social_pills(draw, config, w, h, h - footer_h + 20, alignment="center")
+    return h - footer_h
+
+def draw_footer_variant(image, draw, config, w, h, footer_h=200):
+    """
+    Dispatches to one of the pre-approved footer styles based on variant_seed
+    (see pick_variant) - gives templates that share draw_complex_footer visible
+    variety across a campaign without inventing a new, unapproved look.
+    """
+    style = pick_variant(config, ("complex", "pills"))
+    if style == "pills":
+        return draw_pills_footer(image, draw, config, w, h, footer_h=min(footer_h, 140))
+    return draw_complex_footer(image, draw, config, w, h, footer_h=footer_h)
+
 def resize_to_fill(img, target_w, target_h):
     img_w, img_h = img.size
     ratio = max(target_w / img_w, target_h / img_h)
@@ -296,6 +473,55 @@ def resize_to_fill(img, target_w, target_h):
     left = (new_size[0] - target_w) / 2
     top = (new_size[1] - target_h) / 2
     return img.crop((left, top, left + target_w, top + target_h))
+
+def _hue_distance(rgb_a, rgb_b):
+    """Rough perceptual distance between two colors (0-441ish), no colorsys needed."""
+    return math.sqrt(sum((a - b) ** 2 for a, b in zip(rgb_a, rgb_b)))
+
+def harmonize_background(image, primary_rgb, accent_rgb, strength=0.12):
+    """
+    Pull a loaded background asset toward the brand palette instead of letting it
+    fight the primary/accent colors drawn on top. Background template art may ship
+    with its own unrelated tones (pastels, neutrals); if the image's dominant color
+    is far from both brand colors, tint it with a low-opacity brand-colored duotone
+    wash so every render reads as one coherent system regardless of which background
+    asset was loaded. Returns the (possibly tinted) image.
+    """
+    sample = image.convert('RGB').resize((1, 1), Image.Resampling.BOX)
+    dominant = sample.getpixel((0, 0))
+    dist_primary = _hue_distance(dominant, primary_rgb)
+    dist_accent = _hue_distance(dominant, accent_rgb)
+    closest, dist = (primary_rgb, dist_primary) if dist_primary <= dist_accent else (accent_rgb, dist_accent)
+    if dist < 90:
+        return image  # already close enough to the brand palette, leave it alone
+    tint_alpha = int(255 * min(strength, 0.25))
+    overlay = Image.new('RGBA', image.size, (*closest, tint_alpha))
+    return Image.alpha_composite(image.convert('RGBA'), overlay).convert('RGB')
+
+def pick_variant(config, options):
+    """
+    Deterministically choose one of `options` based on config['variant_seed'].
+    variant_seed=None (the default) always resolves to options[0], so behavior is
+    unchanged unless a caller (an API request or a campaign script) opts into
+    variation by supplying an integer seed. This is what gives a batch of flyers
+    for the same template_id visible compositional variety - a different but
+    still pre-approved motif/palette per seed - instead of every render in a
+    campaign being pixel-identical apart from the text.
+    """
+    seed = config.get('variant_seed')
+    if seed is None:
+        return options[0]
+    return options[int(seed) % len(options)]
+
+def shade_color(hex_str, amount):
+    """Lighten (amount > 0) or darken (amount < 0) a hex color by `amount` in [-1, 1]."""
+    r, g, b = hex_to_rgb(hex_str)
+    if amount >= 0:
+        r, g, b = (int(v + (255 - v) * amount) for v in (r, g, b))
+    else:
+        r, g, b = (int(v * (1 + amount)) for v in (r, g, b))
+    r, g, b = (max(0, min(255, v)) for v in (r, g, b))
+    return '#{:02X}{:02X}{:02X}'.format(r, g, b)
 
 def draw_glass_rect(image, xy, fill=(255, 255, 255, 120), blur_radius=20):
     """Draws a 'glass' effect rectangle with background blur."""
@@ -361,19 +587,25 @@ def render_modern_corporate(ctx):
 
     # 3. Typography (Clean grid)
     curr_y = padding * 2 + int(h * 0.45) + 60
-    
-    # Headline
+
+    # Headline (contrast picked from the real pixels behind it, not assumed)
+    headline_text = c.get('headline', 'PREMIUM SERVICES').upper()
     font_h = get_font(c['default_font'], 80, bold=True)
-    curr_y = draw_wrapped_text(d, c.get('headline', 'PREMIUM SERVICES').upper(), font_h, secondary, w - 2*padding, w/2, curr_y, alignment="center")
-    
+    h_box = estimate_text_box(headline_text, font_h, w/2, curr_y, w - 2*padding, alignment="center")
+    head_color = ensure_legible(f, h_box)
+    curr_y = draw_wrapped_text(d, headline_text, font_h, head_color, w - 2*padding, w/2, curr_y, alignment="center")
+
     # Accent Line
     curr_y += 20
     draw_accent_line(d, (w/2 - 100, curr_y), (w/2 + 100, curr_y), primary, width=4)
     curr_y += 40
-    
-    # Tagline
-    font_tag = get_font(c['default_font'], 28)
-    curr_y = draw_wrapped_text(d, c.get('tagline', 'EXCELLENCE IN EVERY DETAIL'), font_tag, secondary, w - 2*padding, w/2, curr_y, alignment="center")
+
+    # Tagline (tracked kicker style - distinct voice from the bold headline)
+    tagline_text = c.get('tagline', 'EXCELLENCE IN EVERY DETAIL').upper()
+    font_tag = get_font(c['default_font'], 22)
+    tag_box = estimate_text_box(tagline_text, font_tag, w/2, curr_y, w - 2*padding, alignment="center")
+    tag_color = ensure_legible(f, tag_box)
+    curr_y = draw_wrapped_tracked_text(d, tagline_text, font_tag, tag_color, w - 2*padding, w/2, curr_y, alignment="center")
     
     # 4. Features (Minimalist Grid)
     curr_y += 80
@@ -383,14 +615,19 @@ def render_modern_corporate(ctx):
         fx = padding + i * fw
         d.rectangle([fx + fw/2 - 20, curr_y, fx + fw/2 + 20, curr_y + 4], fill=primary)
         font_f = get_font(c['default_font'], 20, bold=True)
-        draw_wrapped_text(d, item.get('title', '').upper(), font_f, secondary, fw - 20, fx + fw/2, curr_y + 20)
+        title_text = item.get('title', '').upper()
+        title_box = estimate_text_box(title_text, font_f, fx + fw/2, curr_y + 20, fw - 20, alignment="center")
+        title_color = ensure_legible(f, title_box, add_scrim=False)
+        draw_wrapped_text(d, title_text, font_f, title_color, fw - 20, fx + fw/2, curr_y + 20)
 
     # 5. Footer
     font_footer = get_font(c['default_font'], 24, bold=True)
-    d.text((padding, h - padding - 20), c.get('company_name', 'CORE').upper(), font=font_footer, fill=secondary)
-    
+    company_text = c.get('company_name', 'CORE').upper()
+    company_box = (padding, h - padding - 24, padding + font_footer.getlength(company_text), h - padding + 8)
+    d.text((padding, h - padding - 20), company_text, font=font_footer, fill=ensure_legible(f, company_box, add_scrim=False))
+
     draw_social_pills(d, c, w, h, h - padding - 65, alignment="center")
-    
+
     cta_text = c.get('cta_text', 'www.codees-cm.com')
     d.text((w - padding - font_footer.getlength(cta_text), h - padding - 20), cta_text, font=font_footer, fill=primary)
 
@@ -409,14 +646,14 @@ def render_marketing_agency(ctx):
 
     # 0. State Detection
     bg_path = c.get('bg_image_path', '')
-    is_template_bg = 'template' in bg_path or 'logo' in bg_path
+    is_template_bg = c.get('_is_template_bg', bool(bg_path))
 
     # 1. Background Enhancement (Gradient + Pattern)
     if not bg_path:
         for i in range(h):
             color = tuple(int(secondary[j] * (0.7 + 0.3 * i / h)) for j in range(3))
             d.line([(0, i), (w, i)], fill=color)
-        draw_geometric_pattern(f, (*primary, 20), type="lines")
+        draw_geometric_pattern(f, (*primary, 20), type=pick_variant(c, ("lines", "diagonal", "grid")))
     
     # Branded Header Box (To fill empty space at the top)
     header_h = 140
@@ -463,7 +700,8 @@ def render_marketing_agency(ctx):
     font_h = get_font(c['default_font'], h_size, bold=True)
     
     headline = c.get('headline', 'BE BOLD.').upper()
-    text_color_h = "#1A1A1A" if is_template_bg else "#FFFFFF"
+    h_box = estimate_text_box(headline, font_h, padding, draw_y, content_w_inner, alignment="left", line_height=0.85)
+    text_color_h = ensure_legible(f, h_box)
     draw_y = draw_wrapped_text(d, headline, font_h, text_color_h, content_w_inner, padding, draw_y, alignment="left", line_height=0.85)
     
     # Accent Detail
@@ -471,11 +709,11 @@ def render_marketing_agency(ctx):
     d.rectangle([padding, curr_y, padding + 60, curr_y + 4], fill=primary)
     draw_y = curr_y + 35
     
-    # Tagline/Body (Dynamic)
+    # Tagline/Body (tracked kicker style - distinct voice from the bold headline)
     tagline = c.get('tagline', '').upper()
     if tagline:
-        font_tag = get_font(c['default_font'], int(h * 0.035), bold=True)
-        draw_y = draw_wrapped_text(d, tagline, font_tag, primary, content_w_inner, padding, draw_y, alignment="left")
+        font_tag = get_font(c['default_font'], int(h * 0.03), bold=True)
+        draw_y = draw_wrapped_tracked_text(d, tagline, font_tag, primary, content_w_inner, padding, draw_y, alignment="left")
     
     body_text = c.get('body_text', '')
     if body_text:
@@ -485,11 +723,12 @@ def render_marketing_agency(ctx):
         body_size = calculate_optimal_font_size(d, body_text, c['default_font'], 
                                               content_w_inner, max_h_body, int(h * 0.028), bold=False, min_size=18)
         font_body = get_font(c['default_font'], body_size)
-        text_color_b = "#444444" if is_template_bg else "#DDDDDD"
+        b_box = estimate_text_box(body_text, font_body, padding, draw_y, content_w_inner, alignment="left", line_height=1.4)
+        text_color_b = ensure_legible(f, b_box, dark_text="#333333", light_text="#DDDDDD")
         draw_wrapped_text(d, body_text, font_body, text_color_b, content_w_inner, padding, draw_y, alignment="left", line_height=1.4)
 
     # 5. Branded Footer (Professional Complex Layout)
-    draw_complex_footer(f, d, c, w, h, footer_h=200)
+    draw_footer_variant(f, d, c, w, h, footer_h=200)
 
 def render_zenith_modern(ctx):
     """Zenith v3: Premium Aesthetic - Asset-aware, vertically balanced, and pattern-enriched."""
@@ -508,7 +747,7 @@ def render_zenith_modern(ctx):
     img_path = c.get('image_path', '')
     has_hero_img = bool(img_path and os.path.exists(img_path))
     bg_path = c.get('bg_image_path', '')
-    is_template_bg = 'template' in bg_path or 'logo' in bg_path
+    is_template_bg = c.get('_is_template_bg', bool(bg_path))
     is_light = c.get('bg_color', '').upper() == '#FFFFFF' or is_template_bg
 
     # 1. Background Enhancement
@@ -517,7 +756,7 @@ def render_zenith_modern(ctx):
         d.rectangle([0, 0, w, h], fill=base_fill)
         if not has_hero_img:
             # Add patterns to image-less background to avoid "dead space"
-            draw_geometric_pattern(f, (*primary, 30), type="dots")
+            draw_geometric_pattern(f, (*primary, 30), type=pick_variant(c, ("dots", "grid", "diagonal")))
             if not is_light:
                 # Add a subtle vignette gradient
                 for i in range(h):
@@ -566,8 +805,6 @@ def render_zenith_modern(ctx):
     # 4. Content inside card (Dynamic Typography)
     inner_padding = int(card_w * 0.1)
     curr_x = card_x + inner_padding
-    curr_y = card_y + int(card_h * 0.08)
-    text_color = "#1A1A1A" if is_template_bg else "#FFFFFF"
 
     # Headline Start
     curr_y = card_y + int(card_h * 0.12)
@@ -576,9 +813,13 @@ def render_zenith_modern(ctx):
     max_h_h = int(card_h * 0.35)
     h_init = int(card_h * 0.14) if is_landscape else int(card_h * 0.10)
     headline = c.get('headline', 'ELEVATING STANDARDS').upper()
-    h_size = calculate_optimal_font_size(d, headline, c['default_font'], 
+    h_size = calculate_optimal_font_size(d, headline, c['default_font'],
                                        card_w - 2*inner_padding, max_h_h, h_init)
     font_h = get_font(c['default_font'], h_size, bold=True)
+    h_box = estimate_text_box(headline, font_h, curr_x, curr_y, card_w - 2*inner_padding, alignment="left", line_height=0.85)
+    # Sample the REAL pixels behind the headline (card, photo, or bare bg) instead
+    # of assuming color from whether a template background was selected.
+    text_color = ensure_legible(f, h_box)
     curr_y = draw_wrapped_text(d, headline, font_h, text_color, card_w - 2*inner_padding, curr_x, curr_y, alignment="left", line_height=0.85)
     
     # Accent Line
@@ -586,11 +827,11 @@ def render_zenith_modern(ctx):
     d.rectangle([curr_x, curr_y, curr_x + 80, curr_y + 4], fill=accent)
     curr_y += 25
     
-    # Tagline (Dynamic)
+    # Tagline (tracked kicker style - distinct voice from the bold headline)
     if c.get('tagline'):
-        font_tag = get_font(c['default_font'], int(card_h * 0.05), bold=True)
+        font_tag = get_font(c['default_font'], int(card_h * 0.042), bold=True)
         tag_color = primary if is_template_bg else accent
-        curr_y = draw_wrapped_text(d, c['tagline'], font_tag, tag_color, card_w - 2 * inner_padding, curr_x, curr_y, alignment="left")
+        curr_y = draw_wrapped_tracked_text(d, c['tagline'].upper(), font_tag, tag_color, card_w - 2 * inner_padding, curr_x, curr_y, alignment="left")
         curr_y += 15
 
     # Dynamic Body / Features
@@ -605,7 +846,8 @@ def render_zenith_modern(ctx):
             
             # Title
             font_it = get_font(c['default_font'], int(card_h * 0.04), bold=True)
-            text_color_ft = "#1A1A1A" if is_template_bg else "#FFFFFF"
+            # Reuse the headline's sampled contrast color - same card/region.
+            text_color_ft = text_color
             # Offset text to the right of the icon
             d.text((curr_x + 35, curr_y), feat['title'], font=font_it, fill=text_color_ft)
             curr_y += int(font_it.size * 1.5)
@@ -616,11 +858,12 @@ def render_zenith_modern(ctx):
         b_size = calculate_optimal_font_size(d, c['body_text'], c['default_font'], 
                                            card_w - 2*inner_padding, max_h_b, int(card_h * 0.045), bold=False, min_size=16)
         font_body = get_font(c['default_font'], b_size)
-        body_color = "#444444" if is_template_bg else "#DDDDDD"
+        b_box = estimate_text_box(c['body_text'], font_body, curr_x, curr_y, card_w - 2*inner_padding, alignment="left", line_height=1.4)
+        body_color = ensure_legible(f, b_box, dark_text="#333333", light_text="#DDDDDD")
         draw_wrapped_text(d, c['body_text'], font_body, body_color, card_w - 2*inner_padding, curr_x, curr_y, alignment="left", line_height=1.4)
 
     # 5. Branded Footer (Professional Complex Layout)
-    draw_complex_footer(f, d, c, w, h, footer_h=200)
+    draw_footer_variant(f, d, c, w, h, footer_h=200)
 
 def render_codees_minimal(ctx):
     """Codees Clean v3: Sophisticated minimalist design, asset-aware and balanced."""
@@ -636,7 +879,7 @@ def render_codees_minimal(ctx):
     # Detect if we are using Template 4 (Pointing Woman on the right)
     bg_path = c.get('bg_image_path', '')
     is_template_4 = 'template_4' in bg_path
-    is_template_bg = 'template' in bg_path or 'logo' in bg_path
+    is_template_bg = c.get('_is_template_bg', bool(bg_path))
     
     padding = int(w * 0.08)
     content_w = int(w * 0.55) if is_template_4 else int(w * 0.85)
@@ -648,8 +891,8 @@ def render_codees_minimal(ctx):
     # 1. Background Pattern (Subtle depth)
     if not c.get('bg_image_path'):
         d.rectangle([0, 0, w, h], fill="#FFFFFF")
-        draw_geometric_pattern(f, (*primary, 20), type="dots")
-    
+        draw_geometric_pattern(f, (*primary, 20), type=pick_variant(c, ("dots", "grid", "diagonal")))
+
     # 2. Content overlay for readability (Refined Glassmorphism)
     if is_template_4 and not is_template_bg:
         draw_glass_rect(f, (0, 0, content_w + padding, h), fill=(255, 255, 255, 200), blur_radius=8)
@@ -661,40 +904,40 @@ def render_codees_minimal(ctx):
     
     # 4. Content Block (Dynamic Typography)
     curr_y = 280
-    
-    # 4. Content Block (Dynamic Typography)
-    curr_y = 280
-    
-    # Calculate contrast dynamically because templates can be light or dark 
-    base_bg_color = '#FFFFFF' if is_template_bg else c.get('bg_color', '#FFFFFF')
-    contrast_text = "#1A1A1A" if get_brightness(base_bg_color) > 128 else "#FFFFFF"
-    
+
     # Dynamic Headline
     max_h_h = int(h * 0.3)
     h_init = int(h * 0.08)
     headline = c.get('headline', 'BUILD THE FUTURE').upper()
     h_size = calculate_optimal_font_size(d, headline, c['default_font'], content_w, max_h_h, h_init)
     font_h = get_font(c['default_font'], h_size, bold=True)
+    h_box = estimate_text_box(headline, font_h, text_x, curr_y, content_w, alignment=alignment, line_height=0.95)
+    # Sample the real composited pixels (photo/glass-card/pattern) instead of
+    # guessing brightness from bg_color, which is meaningless once a background
+    # image or glass card is actually what's behind the text.
+    contrast_text = ensure_legible(f, h_box)
+    bg_is_light = contrast_text == "#1A1A1A"
     curr_y = draw_wrapped_text(d, headline, font_h, contrast_text, content_w, text_x, curr_y, alignment=alignment, line_height=0.95)
-    
-    # Tagline (Dynamic)
+
+    # Tagline (tracked kicker style - distinct voice from the bold headline)
     if c.get('tagline'):
         curr_y += 20
-        font_tag = get_font(c['default_font'], int(h * 0.035), bold=True)
+        font_tag = get_font(c['default_font'], int(h * 0.03), bold=True)
         # Use primary for tagline if background is light, otherwise try accent
-        tag_color = primary if get_brightness(base_bg_color) > 128 else accent
-        curr_y = draw_wrapped_text(d, c['tagline'], font_tag, tag_color, content_w, text_x, curr_y, alignment=alignment, line_height=1.2)
+        tag_color = primary if bg_is_light else accent
+        curr_y = draw_wrapped_tracked_text(d, c['tagline'].upper(), font_tag, tag_color, content_w, text_x, curr_y, alignment=alignment, line_height=1.2)
 
     # 5. Professional Footer Items (Pills)
     footer_y = h - 220
-    
+
     # Body Text (Dynamic)
     if c.get('body_text'):
         curr_y += 25
         max_h_b = footer_y - 20 - curr_y
         b_size = calculate_optimal_font_size(d, c['body_text'], c['default_font'], content_w, max_h_b, int(h * 0.028), min_size=20)
         font_body = get_font(c['default_font'], b_size)
-        body_color = "#444444" if get_brightness(base_bg_color) > 128 else "#DDDDDD"
+        b_box = estimate_text_box(c['body_text'], font_body, text_x, curr_y, content_w, alignment=alignment, line_height=1.4)
+        body_color = ensure_legible(f, b_box, dark_text="#333333", light_text="#DDDDDD")
         curr_y = draw_wrapped_text(d, c['body_text'], font_body, body_color, content_w, text_x, curr_y, alignment=alignment, line_height=1.4)
     
     # 5. Professional Footer Items (Pills)
@@ -731,7 +974,7 @@ def render_codees_hero(ctx):
         d.rectangle([0, 0, w, h], fill='#1A1A2E')
 
     # 2. Gradient overlay – dark from bottom, fades up (ensures legibility)
-    is_template_bg = 'template' in c.get('bg_image_path', '') or 'logo' in c.get('bg_image_path', '')
+    is_template_bg = c.get('_is_template_bg', bool(c.get('bg_image_path')))
     if not is_template_bg:
         gradient = Image.new('RGBA', (w, h), (0, 0, 0, 0))
         gd = ImageDraw.Draw(gradient)
@@ -754,18 +997,20 @@ def render_codees_hero(ctx):
     headline  = c.get('headline', 'DIGITAL TRANSFORMATION').upper()
     tagline   = c.get('tagline',  'SUCCESS STORIES FROM AFRICA').upper()
 
-    font_tag  = get_font(c['default_font'], 30, bold=True)
+    font_tag  = get_font(c['default_font'], 26, bold=True)
     font_h    = get_font(c['default_font'], 88, bold=True)
-    
-    # Small accent category label above headline
+
+    # Small accent category label above headline (tracked kicker style - distinct
+    # voice from the bold headline below it)
     tag_y = baseline - int(font_h.size * 1.2 * len(textwrap.wrap(headline, 16))) - 80
-    d.text((padding_x, tag_y), tagline, font=font_tag, fill=(*accent, 255))
+    draw_tracked_text(d, tagline, font_tag, (*accent, 255), padding_x, tag_y, tracking=4)
     draw_accent_line(d, (padding_x, tag_y + 44), (padding_x + 200, tag_y + 44), accent, width=3)
 
-    # Main headline (Dynamic Contrast)
-    base_bg_color = '#FFFFFF' if is_template_bg else c.get('bg_color', '#1A1A2E')
-    text_color_h = "#1A1A1A" if get_brightness(base_bg_color) > 128 else "#FFFFFF"
-    
+    # Main headline (contrast sampled from the real composited pixels - photo,
+    # gradient and all - instead of guessed from bg_color/template presence)
+    h_box = estimate_text_box(headline, font_h, padding_x, tag_y + 68, w * 0.75, alignment='left', line_height=1.05)
+    text_color_h = ensure_legible(f, h_box)
+
     draw_wrapped_text(d, headline, font_h, text_color_h, w * 0.75,
                       padding_x, tag_y + 68,
                       alignment='left', line_height=1.05)
@@ -802,7 +1047,7 @@ def render_social_post(ctx):
     # 1. Background Pattern (Subtle dots for texture)
     if not bg_path:
         d.rectangle([0, 0, w, h], fill="#F8FAFC")
-        draw_geometric_pattern(f, (*primary, 25), type="dots")
+        draw_geometric_pattern(f, (*primary, 25), type=pick_variant(c, ("dots", "grid", "diagonal")))
     
     # 2. Main Content Box
     if is_template_2:
@@ -829,14 +1074,21 @@ def render_social_post(ctx):
         text_w = w - 2*padding
         text_x = w / 2
 
+    # Footer position needed below regardless of branch (fixes a latent
+    # NameError: this used to only be assigned inside the `if not is_template_2`
+    # block further down, but was referenced above it when computing max_h_b).
+    footer_y = h - 140
+
     # Headline/Quote (Dynamic Scaling)
     max_h_h = int(h * 0.4)
     h_init = int(h * 0.08) if is_template_2 else int(h * 0.065)
     headline = c.get('headline', 'BE INSPIRED').upper()
     h_size = calculate_optimal_font_size(d, headline, c['default_font'], text_w, max_h_h, h_init)
     font_h = get_font(c['default_font'], h_size, bold=True)
-    curr_y = draw_wrapped_text(d, headline, font_h, secondary, text_w, text_x, curr_y, alignment="center", line_height=0.95)
-    
+    h_box = estimate_text_box(headline, font_h, text_x, curr_y, text_w, alignment="center", line_height=0.95)
+    headline_color = ensure_legible(f, h_box)
+    curr_y = draw_wrapped_text(d, headline, font_h, headline_color, text_w, text_x, curr_y, alignment="center", line_height=0.95)
+
     # Tagline/Body (Dynamic)
     if c.get('body_text') or c.get('tagline'):
         curr_y += 30
@@ -850,7 +1102,6 @@ def render_social_post(ctx):
     # 3. Dynamic Branded Footer (Removed for Template 2 Quote Style)
     if not is_template_2:
         # Standard social post footer
-        footer_y = h - 140
         cta_text = c.get('cta_text', 'www.codees-cm.com').upper()
         font_cta = get_font(c['default_font'], int(h * 0.025), bold=True)
         tw = font_cta.getlength(cta_text)
@@ -873,7 +1124,7 @@ def render_abstract_business(ctx):
 
     # ── 1. White base ──────────────────────────────────────────────────────────
     bg_path = c.get('bg_image_path', '')
-    is_template_bg = 'template' in bg_path or 'logo' in bg_path
+    is_template_bg = c.get('_is_template_bg', bool(bg_path))
     if not bg_path:
         d.rectangle([0, 0, w, h], fill='#FFFFFF')
 
@@ -910,7 +1161,9 @@ def render_abstract_business(ctx):
     font_h = get_font(c['default_font'], 80, bold=True)
     headline = c.get('headline', 'CODEES\nCOMPANY').upper()
     curr_y = int(h * 0.12)
-    text_color_h = dark if is_template_bg else '#FFFFFF'
+    h_lines = textwrap.wrap(headline, width=12)
+    h_box = (50, curr_y, 50 + max((font_h.getlength(l) for l in h_lines), default=0), curr_y + int(font_h.size * 1.1) * max(1, len(h_lines)))
+    text_color_h = ensure_legible(f, h_box)
     for line in textwrap.wrap(headline, width=12):
         d.text((50, curr_y), line, font=font_h, fill=text_color_h)
         curr_y += int(font_h.size * 1.1)
@@ -954,19 +1207,20 @@ def render_abstract_business(ctx):
     sub = c.get('sub_headline', 'ABSTRACT BUSINESS').upper()
     font_sub = get_font(c['default_font'], 52, bold=True)
     sub_w = font_sub.getlength(sub)
-    text_color_sub = dark if is_template_bg else '#FFFFFF'
+    sub_box = ((w - sub_w) / 2, panel_y + 40, (w + sub_w) / 2, panel_y + 40 + font_sub.size * 1.3)
+    text_color_sub = ensure_legible(f, sub_box)
     d.text(((w - sub_w) / 2, panel_y + 40), sub, font=font_sub, fill=text_color_sub)
 
-    # Sub-tagline
+    # Sub-tagline (tracked kicker style - distinct voice from the bold headline)
     tag = c.get('tagline', 'LOREM IPSUM DOLORES').upper()
-    font_tag2 = get_font(c['default_font'], 26)
-    tag_w = font_tag2.getlength(tag)
-    d.text(((w - tag_w) / 2, panel_y + 108), tag, font=font_tag2, fill=primary)
+    font_tag2 = get_font(c['default_font'], 22, bold=True)
+    draw_tracked_text(d, tag, font_tag2, primary, w / 2, panel_y + 112, tracking=3, alignment="center")
 
     # Body text
     body = c.get('body_text', 'Join the fastest-growing tech community in Cameroon. We connect developers, designers, and entrepreneurs to create impact.')
     font_b = get_font(c['default_font'], 22)
-    text_color_b = '#444444' if is_template_bg else '#CCCCCC'
+    b_box = estimate_text_box(body, font_b, w / 2, panel_y + 155, w * 0.76, alignment='center', line_height=1.5)
+    text_color_b = ensure_legible(f, b_box, dark_text="#333333", light_text="#CCCCCC")
     draw_wrapped_text(d, body, font_b, text_color_b, w * 0.76, w / 2, panel_y + 155, alignment='center', line_height=1.5)
 
     # ── 8. Feature icons row ───────────────────────────────────────────────────
@@ -986,14 +1240,14 @@ def render_abstract_business(ctx):
         ic_char = feat.get('icon', '●')
         ic_w = font_ic.getlength(ic_char)
         d.text((cx - ic_w / 2, icon_y - 24), ic_char, font=font_ic, fill=primary)
-        # Title
+        # Title - reuse the panel's sampled contrast color (same visual band as the sub-headline)
         font_it = get_font(c['default_font'], 22, bold=True)
         it_w = font_it.getlength(feat['title'])
-        text_color_ft = dark if is_template_bg else '#FFFFFF'
+        text_color_ft = text_color_sub
         d.text((cx - it_w / 2, icon_y + r + 12), feat['title'], font=font_it, fill=text_color_ft)
         # Desc
         font_id = get_font(c['default_font'], 18)
-        text_color_fc = '#666666' if is_template_bg else '#AAAAAA'
+        text_color_fc = '#666666' if text_color_sub == dark or text_color_sub == "#1A1A1A" else '#AAAAAA'
         draw_wrapped_text(d, feat.get('desc', ''), font_id, text_color_fc, col_w - 40, cx, icon_y + r + 46, alignment='center', line_height=1.35)
 
     # ── 9. Social footer strip ─────────────────────────────────────────────────
@@ -1022,7 +1276,7 @@ def render_abstract_social(ctx):
 
     # 1. White base
     bg_path = c.get('bg_image_path', '')
-    is_template_bg = 'template' in bg_path or 'logo' in bg_path
+    is_template_bg = c.get('_is_template_bg', bool(bg_path))
     if not bg_path:
         d.rectangle([0, 0, w, h], fill='#FFFFFF')
 
@@ -1057,7 +1311,9 @@ def render_abstract_social(ctx):
     font_h   = get_font(c['default_font'], 70, bold=True)
     headline = c.get('headline', 'JOIN CODEES').upper()
     curr_y   = int(h * 0.10)
-    text_color_h = dark if is_template_bg else '#FFFFFF'
+    h_lines  = textwrap.wrap(headline, width=10)
+    h_box = (44, curr_y, 44 + max((font_h.getlength(l) for l in h_lines), default=0), curr_y + int(font_h.size * 1.08) * max(1, len(h_lines)))
+    text_color_h = ensure_legible(f, h_box)
     for line in textwrap.wrap(headline, width=10):
         d.text((44, curr_y), line, font=font_h, fill=text_color_h)
         curr_y += int(font_h.size * 1.08)
@@ -1084,7 +1340,8 @@ def render_abstract_social(ctx):
     # Wrap if needed
     sub_lines = textwrap.wrap(sub, width=18)
     sy = panel_y + 30
-    text_color_sub = dark if is_template_bg else '#FFFFFF'
+    sub_box = (0, sy, w, sy + int(font_sub.size * 1.1) * max(1, len(sub_lines)))
+    text_color_sub = ensure_legible(f, sub_box)
     for sl in sub_lines:
         slw = font_sub.getlength(sl)
         d.text(((w - slw) / 2, sy), sl, font=font_sub, fill=text_color_sub)
@@ -1199,6 +1456,17 @@ def generate_flyer(params):
         try: config['features'] = json.loads(config['features'])
         except: pass
 
+    # Tonal palette variant (Phase D): a `variant_seed` gives a batch of flyers
+    # for the same template visible variety without leaving the brand palette -
+    # these are shades of the SAME primary/accent, not new colors.
+    tone_variants = [(0.0, 0.0), (-0.16, 0.14), (0.14, -0.16)]
+    shift_primary, shift_accent = pick_variant(config, tone_variants)
+    if shift_primary or shift_accent:
+        if shift_primary:
+            config['primary_color'] = shade_color(config.get('primary_color', '#0076BC'), shift_primary)
+        if shift_accent:
+            config['accent_color'] = shade_color(config.get('accent_color', '#ED1C24'), shift_accent)
+
     width = int(config['flyer_width'])
     height = int(config['flyer_height'])
     
@@ -1208,21 +1476,33 @@ def generate_flyer(params):
         height = 1080
         
     bg_path = config.get('bg_image_path')
+    # Single source of truth for "a background asset is already doing the work" -
+    # replaces the ~7 duplicated `'template' in bg_path or 'logo' in bg_path` guesses
+    # that used to be scattered across renderers.
+    config['_is_template_bg'] = bool(bg_path)
     if bg_path and os.path.exists(bg_path):
         try:
             bg_img = Image.open(bg_path).convert('RGB')
             flyer = resize_to_fill(bg_img, width, height)
+            flyer = harmonize_background(
+                flyer,
+                hex_to_rgb(config.get('primary_color', '#0076BC')),
+                hex_to_rgb(config.get('accent_color', '#ED1C24')),
+            )
         except Exception as e:
             print(f"Error loading background image: {e}")
             flyer = Image.new('RGB', (width, height), config['bg_color'])
     else:
         flyer = Image.new('RGB', (width, height), config['bg_color'])
-        
+
     draw = ImageDraw.Draw(flyer)
     
     ctx = {'flyer': flyer, 'draw': draw, 'width': width, 'height': height, 'config': config}
 
-    if tid == 'marketing_agency':
+    if tid == 'modern_corporate':
+        print("DEBUG: Calling render_modern_corporate")
+        render_modern_corporate(ctx)
+    elif tid == 'marketing_agency':
         print("DEBUG: Calling render_marketing_agency")
         render_marketing_agency(ctx)
     elif tid == 'social_post':

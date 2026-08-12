@@ -116,8 +116,12 @@ def generate_campaign():
 
     api_bodies = {}
 
-    for item in campaign_data:
+    for i, item in enumerate(campaign_data):
         print(f"Generating flyer: {item['id']}...")
+        # Give each campaign item a different (but still on-brand) motif/palette
+        # variant so the batch reads as a coherent campaign with visual rhythm,
+        # instead of the same template repeated with only the text changed.
+        item['params'].setdefault('variant_seed', i)
         img_data = generate_flyer(item['params'])
         filename = f"campaign/codees_{item['id']}.png"
         with open(filename, "wb") as f:

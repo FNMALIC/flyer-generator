@@ -9,6 +9,7 @@ env/
 
 # Project Specific
 uploads/
+samples/
 test_output_*.png
 test_zenith.png
 test_elite.png

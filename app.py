@@ -83,11 +83,9 @@ def generate_flyer_endpoint():
         
         template_name = data.get('template') or form.get('template')
 
-        # Use default image.png as fallback ONLY if no image and no template
-        if not img_path and not template_name:
-            default_path = os.path.join(os.path.dirname(__file__), 'image.png')
-            if os.path.exists(default_path):
-                img_path = default_path
+        # No image/template supplied: let the renderer's own "no hero image"
+        # procedural-background path handle it (branded pattern/gradient) instead
+        # of silently substituting an arbitrary, unrelated default photo.
 
         # Background image (manual upload)
         bg_image_path = None
@@ -116,8 +114,9 @@ def generate_flyer_endpoint():
             elif key in form:
                 params[key] = form[key]
 
-        if not params.get('image_path') and not params.get('template') and not params.get('bg_image_path'):
-             return jsonify({"error": "No template, image, or background image specified"}), 400
+        # No image/template/bg_image is a valid request now: generate_flyer()
+        # falls through to a branded procedural background (see flyer_generator's
+        # "no hero image" render paths) instead of needing one of these three.
 
         # Generate flyer
         try:
